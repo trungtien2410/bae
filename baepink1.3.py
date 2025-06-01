@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import timedelta
 import sys
 from pathlib import Path
+import time
+
 
 def resource_path(relative_path):
     """
@@ -617,7 +619,15 @@ class Ui_MainWindow(object):
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setValue(0)
-
+        
+        
+        
+        # self.spinner = QtWidgets.QLabel()
+        # self.movie = QtGui.QMovie(resource_path("light2.gif"))
+        # self.spinner.setMovie(self.movie)
+        # self.spinner.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        
+        
         self.log_output = QtWidgets.QTextEdit()
         self.log_output.setReadOnly(True)
         # Apply style to log output to allow rich text (for icons)
@@ -628,6 +638,7 @@ class Ui_MainWindow(object):
         tab1_layout.addLayout(btn_layout)
         tab1_layout.addWidget(self.progress_bar)
         tab1_layout.addWidget(self.log_output)
+        # tab1_layout.addWidget(self.spinner)
 
         self.tabWidget.addTab(self.tab1, "Nhóm Dữ Liệu")
 
@@ -701,6 +712,8 @@ class Ui_MainWindow(object):
 
         self.log_output.clear()
         self.progress_bar.setValue(0)
+        # self.movie.start()  # Start the spinner animation
+        # self.movie.stop()  # Stop the spinner animation
         self.log_output.append("🚀 Bắt đầu xử lý...")
         self.create_btn.setEnabled(False)
         self.clear_btn.setEnabled(False)
