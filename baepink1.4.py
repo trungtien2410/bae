@@ -2,6 +2,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 import pandas as pd
 from datetime import timedelta
 import sys
+import os
 from pathlib import Path
 
 def resource_path(relative_path):
@@ -35,8 +36,22 @@ class Worker(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file Excel...")
-            self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
+            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
+            # Get the file extension
+            file_extension = os.path.splitext(self.input_file_path)[1].lower()
+            if file_extension in ['.xlsx', '.xls']:
+                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
+                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
+            elif file_extension == '.csv':
+                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
+                # You might want to add encoding='utf-8' or other encoding if you encounter issues
+                self.data = pd.read_csv(self.input_file_path)
+            else:
+                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+                self.finished.emit(None)
+                return
+
+
             self.df = pd.DataFrame(self.data)
             self.df['buyer_id'] = self.df['buyer_id'].drop_duplicates()
             drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_phone_","recipient_name","buyer_shipping_address","buyer_shipping_address_district","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_id","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","fsv_voucher_code","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
@@ -153,8 +168,20 @@ class Worker2(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file Excel...")
-            self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
+            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
+            # Get the file extension
+            file_extension = os.path.splitext(self.input_file_path)[1].lower()
+            if file_extension in ['.xlsx', '.xls']:
+                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
+                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
+            elif file_extension == '.csv':
+                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
+                # You might want to add encoding='utf-8' or other encoding if you encounter issues
+                self.data = pd.read_csv(self.input_file_path)
+            else:
+                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+                self.finished.emit(None)
+                return
             self.df = pd.DataFrame(self.data)
             self.df['buyer_id'] = self.df['buyer_id'].drop_duplicates()
             drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_name","buyer_shipping_address","buyer_shipping_address_district","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","fsv_voucher_code","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
@@ -172,7 +199,7 @@ class Worker2(QtCore.QThread):
             self.log.emit("ℹ️ Đang xử lý dữ liệu...")
             # Get all the group of > or more unique id have the same recipient_phone_ and the same pv_promotion_id
             # Ensure 'pv_promotion_id' is string to handle mixed types consistently
-            self.df['pv_promotion_id'] = self.df['pv_promotion_id'].astype(str)
+            # self.df['buyer_id'] = self.df['buyer_id'].astype(str)
 
             # Group by recipient_phone_ and pv_promotion_id
             # Then, for each group, find the number of unique buyer_id's
@@ -233,9 +260,22 @@ class Worker3(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file Excel...")
-            self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
+            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
+            # Get the file extension
+            file_extension = os.path.splitext(self.input_file_path)[1].lower()
+            if file_extension in ['.xlsx', '.xls']:
+                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
+                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
+            elif file_extension == '.csv':
+                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
+                # You might want to add encoding='utf-8' or other encoding if you encounter issues
+                self.data = pd.read_csv(self.input_file_path)
+            else:
+                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+                self.finished.emit(None)
+                return
             self.df = pd.DataFrame(self.data)
+            self.original_df = self.df.copy()  # Keep a copy of the original DataFrame
             self.df['buyer_id'] = self.df['buyer_id'].drop_duplicates()
             drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_name","buyer_shipping_address","buyer_shipping_address_district","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
             self.df = self.df.drop(columns=drop_column, errors='ignore')
@@ -649,7 +689,7 @@ class Ui_MainWindow(object):
         Lưu đường dẫn file vào ô nhập mã nhân viên.
         """
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            None, "Chọn file gốc", "", "Excel Files (*.xlsx);;All Files (*)")
+            None, "Chọn file gốc", "", ";;All Files (*)")
         if file_path:
             self.mnv.setText(file_path)
 
