@@ -17,7 +17,7 @@ import time
 
 # --- APPLICATION VERSION & UPDATE CONFIGURATION ---
 # IMPORTANT: Update this version with each new release!
-APP_VERSION = "1.7.0" 
+APP_VERSION = "1.8.0" 
 
 # URL to your version.txt file on GitHub (raw content)
 VERSION_URL = "https://raw.githubusercontent.com/trungtien2410/bae/main/version.txt"
@@ -758,10 +758,7 @@ class Worker7(QtCore.QThread):
         """Normalizes phone numbers to a consistent format (digits only)."""
         if pd.isna(phone):
             return None
-        # Remove non-digit characters
         normalized_phone = re.sub(r'\D', '', str(phone))
-        # Handle common prefixes if necessary, e.g., '84' for Vietnam
-        # For simplicity, we'll keep it as just digits for exact matching.
         return normalized_phone if normalized_phone else None
     
     
@@ -852,228 +849,228 @@ class Worker7(QtCore.QThread):
         except Exception as e:
             self.log.emit(f"❌ Đã xảy ra lỗi trong quá trình xử lý: {e}")
             self.finished.emit(None)
-# class Worker6(QtCore.QThread):
-#     """
-#     Lớp con của QThread tạo tài liệu Excel trong một luồng riêng biệt
-#     dựa trên tên người nhận tương tự và quận địa chỉ giao hàng TƯƠNG TỰ (fuzzy matching),
-#     sử dụng kỹ thuật Blocking để cải thiện hiệu suất.
-#     Phát tín hiệu để cập nhật tiến độ, thông báo nhật ký và trạng thái hoàn thành.
-#     """
-#     progress = QtCore.pyqtSignal(int)
-#     log = QtCore.pyqtSignal(str)
-#     finished = QtCore.pyqtSignal(object)
+class Worker6(QtCore.QThread):
+    """
+    Lớp con của QThread tạo tài liệu Excel trong một luồng riêng biệt
+    dựa trên tên người nhận tương tự và quận địa chỉ giao hàng TƯƠNG TỰ (fuzzy matching),
+    sử dụng kỹ thuật Blocking để cải thiện hiệu suất.
+    Phát tín hiệu để cập nhật tiến độ, thông báo nhật ký và trạng thái hoàn thành.
+    """
+    progress = QtCore.pyqtSignal(int)
+    log = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(object)
 
-#     ADDRESS_SIMILARITY_THRESHOLD = 85 # Adjust this value (0-100)
-#     NAME_BLOCKING_LENGTH = 3 # Number of characters for name blocking
-#     ADDRESS_BLOCKING_WORDS = 2 # Number of words for address blocking (after cleaning)
+    ADDRESS_SIMILARITY_THRESHOLD = 85 # Adjust this value (0-100)
+    NAME_BLOCKING_LENGTH = 3 # Number of characters for name blocking
+    ADDRESS_BLOCKING_WORDS = 2 # Number of words for address blocking (after cleaning)
 
-#     def __init__(self, input_file_path, output_file_path):
-#         super().__init__()
-#         self.input_file_path = input_file_path
-#         self.output_file_path = output_file_path
+    def __init__(self, input_file_path, output_file_path):
+        super().__init__()
+        self.input_file_path = input_file_path
+        self.output_file_path = output_file_path
 
-#     def _normalize_recipient_name(self, text):
-#         if pd.isna(text):
-#             return None
-#         text = str(text).lower()
-#         text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-#         text = re.sub(r'[^a-z0-9\s]', '', text)
-#         text = re.sub(r'\s+', ' ', text).strip()
-#         return text
+    def _normalize_recipient_name(self, text):
+        if pd.isna(text):
+            return None
+        text = str(text).lower()
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+        text = re.sub(r'[^a-z0-9\s]', '', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
 
-#     def _clean_address_for_fuzzy_match(self, address):
-#         if pd.isna(address):
-#             return None
-#         text = str(address).lower()
-#         text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+    def _clean_address_for_fuzzy_match(self, address):
+        if pd.isna(address):
+            return None
+        text = str(address).lower()
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
 
-#         noise_words = [
-#             r'\bsố\s+nhà\b', r'\bngõ\b', r'\bđường\b', r'\bthôn\b', r'\btổ\b', r'\bkhu\s+phố\b',
-#             r'\bấp\b', r'\bkdc\b', r'\bchợ\b', r'\btrường\b', r'\bquán\b', r'\bhội\s+trường\b',
-#             r'\bnhà\s+văn\s+hoá\b', r'\bđội\b', r'\bbản\b', r'\bkhu\s+dân\s+cư\b',
-#             r'\bchân\s+dốc\b', r'\bđèo\b', r'\bngã\s+ba\b', r'\btoà\s+nhà\b', r'\bphường\b',
-#             r'\btownship\b', r'\bvillage\b', r'\bhamlet\b', r'\bstreet\b', r'\bhouse\b',
-#             r'\bxóm\b', r'\bkp\b', r'\bcty\b', r'\bcông\s+ty\b', r'\bchi\s+nhánh\b',
-#             r'\bchi\s+cục\b', r'\bcông\s+viên\b', r'\bkho\b', r'\bxưởng\b', r'\bkcn\b', # Industrial park
-#             r'\bkhu\s+công\s+nghiệp\b'
-#         ]
+        noise_words = [
+            r'\bsố\s+nhà\b', r'\bngõ\b', r'\bđường\b', r'\bthôn\b', r'\btổ\b', r'\bkhu\s+phố\b',
+            r'\bấp\b', r'\bkdc\b', r'\bchợ\b', r'\btrường\b', r'\bquán\b', r'\bhội\s+trường\b',
+            r'\bnhà\s+văn\s+hoá\b', r'\bđội\b', r'\bbản\b', r'\bkhu\s+dân\s+cư\b',
+            r'\bchân\s+dốc\b', r'\bđèo\b', r'\bngã\s+ba\b', r'\btoà\s+nhà\b', r'\bphường\b',
+            r'\btownship\b', r'\bvillage\b', r'\bhamlet\b', r'\bstreet\b', r'\bhouse\b',
+            r'\bxóm\b', r'\bkp\b', r'\bcty\b', r'\bcông\s+ty\b', r'\bchi\s+nhánh\b',
+            r'\bchi\s+cục\b', r'\bcông\s+viên\b', r'\bkho\b', r'\bxưởng\b', r'\bkcn\b', # Industrial park
+            r'\bkhu\s+công\s+nghiệp\b'
+        ]
         
-#         text = re.sub(r'^\s*(so|s)\s+\d+[a-z]?\s*,?\s*', '', text) # "so 42," "s 8a"
-#         text = re.sub(r'\([^)]*\)', '', text) # Remove parentheses
-#         text = re.sub(r'[.,;]', '', text) # Remove common separators
+        text = re.sub(r'^\s*(so|s)\s+\d+[a-z]?\s*,?\s*', '', text) # "so 42," "s 8a"
+        text = re.sub(r'\([^)]*\)', '', text) # Remove parentheses
+        text = re.sub(r'[.,;]', '', text) # Remove common separators
 
-#         for noise in noise_words:
-#             text = re.sub(noise, ' ', text)
+        for noise in noise_words:
+            text = re.sub(noise, ' ', text)
 
-#         text = re.sub(r'\s+', ' ', text).strip() # Consolidate spaces
-#         text = re.sub(r'[^a-z0-9\s]', '', text) # Final non-alphanumeric removal
-#         text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r'\s+', ' ', text).strip() # Consolidate spaces
+        text = re.sub(r'[^a-z0-9\s]', '', text) # Final non-alphanumeric removal
+        text = re.sub(r'\s+', ' ', text).strip()
 
-#         return text if text else None
+        return text if text else None
 
-#     def run(self):
-#         try:
-#             self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
+    def run(self):
+        try:
+            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
             
-#             file_extension = os.path.splitext(self.input_file_path)[1].lower()
-#             if file_extension in ['.xlsx', '.xls']:
-#                 self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-#                 self.df = pd.read_excel(self.input_file_path, engine='openpyxl')
-#             elif file_extension == '.csv':
-#                 self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-#                 self.df = pd.read_csv(self.input_file_path)
-#             else:
-#                 self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
-#                 self.finished.emit(None)
-#                 return
+            file_extension = os.path.splitext(self.input_file_path)[1].lower()
+            if file_extension in ['.xlsx', '.xls']:
+                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
+                self.df = pd.read_excel(self.input_file_path, engine='openpyxl')
+            elif file_extension == '.csv':
+                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
+                self.df = pd.read_csv(self.input_file_path)
+            else:
+                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+                self.finished.emit(None)
+                return
 
-#             self.log.emit("ℹ️ Đang xử lý dữ liệu...")
+            self.log.emit("ℹ️ Đang xử lý dữ liệu...")
             
-#             required_columns = ['buyer_id', 'recipient_name', 'buyer_shipping_address_district']
-#             if not all(col in self.df.columns for col in required_columns):
-#                 missing_cols = [col for col in required_columns if col not in self.df.columns]
-#                 self.log.emit(f"❌ Lỗi: File thiếu các cột bắt buộc cho báo cáo này: {', '.join(missing_cols)}")
-#                 self.finished.emit(None)
-#                 return
+            required_columns = ['buyer_id', 'recipient_name', 'buyer_shipping_address_district']
+            if not all(col in self.df.columns for col in required_columns):
+                missing_cols = [col for col in required_columns if col not in self.df.columns]
+                self.log.emit(f"❌ Lỗi: File thiếu các cột bắt buộc cho báo cáo này: {', '.join(missing_cols)}")
+                self.finished.emit(None)
+                return
 
-#             self.df.dropna(subset=required_columns, inplace=True)
-#             if self.df.empty:
-#                 self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi loại bỏ các hàng thiếu thông tin bắt buộc.")
-#                 self.finished.emit(None)
-#                 return
+            self.df.dropna(subset=required_columns, inplace=True)
+            if self.df.empty:
+                self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi loại bỏ các hàng thiếu thông tin bắt buộc.")
+                self.finished.emit(None)
+                return
 
-#             self.log.emit("ℹ️ Đang chuẩn hóa tên người nhận và địa chỉ...")
-#             self.df['normalized_recipient_name'] = self.df['recipient_name'].apply(self._normalize_recipient_name)
-#             self.df['cleaned_address'] = self.df['buyer_shipping_address_district'].apply(self._clean_address_for_fuzzy_match)
+            self.log.emit("ℹ️ Đang chuẩn hóa tên người nhận và địa chỉ...")
+            self.df['normalized_recipient_name'] = self.df['recipient_name'].apply(self._normalize_recipient_name)
+            self.df['cleaned_address'] = self.df['buyer_shipping_address_district'].apply(self._clean_address_for_fuzzy_match)
 
-#             self.df.dropna(subset=['normalized_recipient_name', 'cleaned_address'], inplace=True)
-#             if self.df.empty:
-#                 self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi chuẩn hóa.")
-#                 self.finished.emit(None)
-#                 return
+            self.df.dropna(subset=['normalized_recipient_name', 'cleaned_address'], inplace=True)
+            if self.df.empty:
+                self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi chuẩn hóa.")
+                self.finished.emit(None)
+                return
 
-#             # --- Blocking Step for improved performance ---
-#             self.log.emit("ℹ️ Đang tạo các khối (block) dữ liệu để so sánh hiệu quả hơn...")
+            # --- Blocking Step for improved performance ---
+            self.log.emit("ℹ️ Đang tạo các khối (block) dữ liệu để so sánh hiệu quả hơn...")
             
-#             # Create a unique ID for each original row, to easily refer back to it
-#             self.df['original_index'] = self.df.index 
+            # Create a unique ID for each original row, to easily refer back to it
+            self.df['original_index'] = self.df.index 
             
-#             # Use 'records' for efficient iteration in Python loop
-#             records = self.df[['original_index', 'normalized_recipient_name', 'cleaned_address', 'buyer_id']].to_dict('records')
+            # Use 'records' for efficient iteration in Python loop
+            records = self.df[['original_index', 'normalized_recipient_name', 'cleaned_address', 'buyer_id']].to_dict('records')
             
-#             # The hashmap/dictionary for blocking
-#             # Key: (name_block, address_block) -> Value: list of record_dicts
-#             blocks = {}
+            # The hashmap/dictionary for blocking
+            # Key: (name_block, address_block) -> Value: list of record_dicts
+            blocks = {}
 
-#             for record in records:
-#                 # Create blocking keys (e.g., first few chars/words)
-#                 name_block = record['normalized_recipient_name'][:self.NAME_BLOCKING_LENGTH] if record['normalized_recipient_name'] else ''
-#                 address_words = record['cleaned_address'].split() if record['cleaned_address'] else []
-#                 address_block = " ".join(address_words[:self.ADDRESS_BLOCKING_WORDS])
+            for record in records:
+                # Create blocking keys (e.g., first few chars/words)
+                name_block = record['normalized_recipient_name'][:self.NAME_BLOCKING_LENGTH] if record['normalized_recipient_name'] else ''
+                address_words = record['cleaned_address'].split() if record['cleaned_address'] else []
+                address_block = " ".join(address_words[:self.ADDRESS_BLOCKING_WORDS])
 
-#                 blocking_key = (name_block, address_block)
+                blocking_key = (name_block, address_block)
                 
-#                 if blocking_key not in blocks:
-#                     blocks[blocking_key] = []
-#                 blocks[blocking_key].append(record)
+                if blocking_key not in blocks:
+                    blocks[blocking_key] = []
+                blocks[blocking_key].append(record)
 
-#             self.log.emit(f"ℹ️ Đã tạo {len(blocks)} khối dữ liệu.")
-#             # --- End Blocking Step ---
+            self.log.emit(f"ℹ️ Đã tạo {len(blocks)} khối dữ liệu.")
+            # --- End Blocking Step ---
 
-#             final_grouped_buyer_ids = set()
+            final_grouped_buyer_ids = set()
             
-#             # To keep track of which original_indices have been added to a final group
-#             processed_original_indices = set() 
+            # To keep track of which original_indices have been added to a final group
+            processed_original_indices = set() 
 
-#             total_blocks = len(blocks)
-#             processed_blocks_count = 0
+            total_blocks = len(blocks)
+            processed_blocks_count = 0
 
-#             self.log.emit("ℹ️ Bắt đầu phân tích nhóm trong từng khối...")
+            self.log.emit("ℹ️ Bắt đầu phân tích nhóm trong từng khối...")
 
-#             for blocking_key, block_records in blocks.items():
-#                 processed_blocks_count += 1
-#                 self.progress.emit(int((processed_blocks_count / total_blocks) * 100))
+            for blocking_key, block_records in blocks.items():
+                processed_blocks_count += 1
+                self.progress.emit(int((processed_blocks_count / total_blocks) * 100))
 
-#                 # If a block is too small, it can't meet the >=3 unique buyer_id criteria anyway
-#                 if len(block_records) < 3:
-#                     continue
+                # If a block is too small, it can't meet the >=3 unique buyer_id criteria anyway
+                if len(block_records) < 3:
+                    continue
 
-#                 # Within each block, perform pairwise fuzzy comparison
-#                 # We need to ensure we don't re-process records that were already grouped *in this block*
-#                 # and efficiently find all members of a cluster.
+                # Within each block, perform pairwise fuzzy comparison
+                # We need to ensure we don't re-process records that were already grouped *in this block*
+                # and efficiently find all members of a cluster.
                 
-#                 # A simple clustering within a block:
-#                 # Iterate through each record in the block as a potential cluster centroid
+                # A simple clustering within a block:
+                # Iterate through each record in the block as a potential cluster centroid
                 
-#                 # Use a local set for this block to manage processed records
-#                 block_processed_record_indices = set() 
+                # Use a local set for this block to manage processed records
+                block_processed_record_indices = set() 
 
-#                 for i in range(len(block_records)):
-#                     current_record_in_block = block_records[i]
-#                     current_original_index = current_record_in_block['original_index']
+                for i in range(len(block_records)):
+                    current_record_in_block = block_records[i]
+                    current_original_index = current_record_in_block['original_index']
 
-#                     # Skip if this record has already been part of a group formed in this block, or a global group
-#                     if current_original_index in block_processed_record_indices or \
-#                        current_original_index in processed_original_indices:
-#                         continue
+                    # Skip if this record has already been part of a group formed in this block, or a global group
+                    if current_original_index in block_processed_record_indices or \
+                       current_original_index in processed_original_indices:
+                        continue
                     
-#                     current_name = current_record_in_block['normalized_recipient_name']
-#                     current_address = current_record_in_block['cleaned_address']
+                    current_name = current_record_in_block['normalized_recipient_name']
+                    current_address = current_record_in_block['cleaned_address']
                     
-#                     # This list will hold the original_indices of records belonging to the current cluster
-#                     current_cluster_original_indices = [current_original_index]
-#                     current_cluster_buyer_ids = [current_record_in_block['buyer_id']]
+                    # This list will hold the original_indices of records belonging to the current cluster
+                    current_cluster_original_indices = [current_original_index]
+                    current_cluster_buyer_ids = [current_record_in_block['buyer_id']]
 
-#                     # Compare this record with all subsequent records in the block
-#                     for j in range(i + 1, len(block_records)):
-#                         other_record_in_block = block_records[j]
-#                         other_original_index = other_record_in_block['original_index']
+                    # Compare this record with all subsequent records in the block
+                    for j in range(i + 1, len(block_records)):
+                        other_record_in_block = block_records[j]
+                        other_original_index = other_record_in_block['original_index']
 
-#                         if other_original_index in block_processed_record_indices or \
-#                            other_original_index in processed_original_indices:
-#                             continue
+                        if other_original_index in block_processed_record_indices or \
+                           other_original_index in processed_original_indices:
+                            continue
 
-#                         other_name = other_record_in_block['normalized_recipient_name']
-#                         other_address = other_record_in_block['cleaned_address']
+                        other_name = other_record_in_block['normalized_recipient_name']
+                        other_address = other_record_in_block['cleaned_address']
 
-#                         name_similarity = fuzz.ratio(current_name, other_name)
-#                         address_similarity = fuzz.token_sort_ratio(current_address, other_address)
+                        name_similarity = fuzz.ratio(current_name, other_name)
+                        address_similarity = fuzz.token_sort_ratio(current_address, other_address)
 
-#                         if name_similarity >= self.ADDRESS_SIMILARITY_THRESHOLD and \
-#                            address_similarity >= self.ADDRESS_SIMILARITY_THRESHOLD:
+                        if name_similarity >= self.ADDRESS_SIMILARITY_THRESHOLD and \
+                           address_similarity >= self.ADDRESS_SIMILARITY_THRESHOLD:
                             
-#                             current_cluster_original_indices.append(other_original_index)
-#                             current_cluster_buyer_ids.append(other_record_in_block['buyer_id'])
+                            current_cluster_original_indices.append(other_original_index)
+                            current_cluster_buyer_ids.append(other_record_in_block['buyer_id'])
                     
-#                     # After comparing current_record with all others in the block, evaluate the cluster
-#                     unique_ids_in_cluster = set(current_cluster_buyer_ids)
+                    # After comparing current_record with all others in the block, evaluate the cluster
+                    unique_ids_in_cluster = set(current_cluster_buyer_ids)
                     
-#                     if len(unique_ids_in_cluster) >= 3:
-#                         # Add these buyer IDs to the final set
-#                         final_grouped_buyer_ids.update(unique_ids_in_cluster)
+                    if len(unique_ids_in_cluster) >= 3:
+                        # Add these buyer IDs to the final set
+                        final_grouped_buyer_ids.update(unique_ids_in_cluster)
                         
-#                         # Mark these records as processed to avoid re-clustering them as a starting point
-#                         processed_original_indices.update(current_cluster_original_indices)
-#                         block_processed_record_indices.update(current_cluster_original_indices)
-#                         self.log.emit(f"✅ Tìm thấy nhóm hợp lệ trong khối '{blocking_key}': {len(unique_ids_in_cluster)} ID duy nhất.")
+                        # Mark these records as processed to avoid re-clustering them as a starting point
+                        processed_original_indices.update(current_cluster_original_indices)
+                        block_processed_record_indices.update(current_cluster_original_indices)
+                        self.log.emit(f"✅ Tìm thấy nhóm hợp lệ trong khối '{blocking_key}': {len(unique_ids_in_cluster)} ID duy nhất.")
 
-#             self.log.emit("ℹ️ Đang lưu kết quả...")
+            self.log.emit("ℹ️ Đang lưu kết quả...")
             
-#             if final_grouped_buyer_ids:
-#                 df_output_ids = pd.DataFrame(list(final_grouped_buyer_ids), columns=['buyer_id'])
-#                 df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
-#                 self.log.emit(f"✅ Đã lưu danh sách ID nhóm tại: {self.output_file_path}")
-#             else:
-#                 self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (ít nhất 3 ID riêng biệt với tên/quận tương đồng).")
+            if final_grouped_buyer_ids:
+                df_output_ids = pd.DataFrame(list(final_grouped_buyer_ids), columns=['buyer_id'])
+                df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
+                self.log.emit(f"✅ Đã lưu danh sách ID nhóm tại: {self.output_file_path}")
+            else:
+                self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (ít nhất 3 ID riêng biệt với tên/quận tương đồng).")
             
-#             self.finished.emit(True)
+            self.finished.emit(True)
             
-#         except FileNotFoundError:
-#             self.log.emit(f"❌ Lỗi: Không tìm thấy file tại đường dẫn: {self.input_file_path}")
-#             self.finished.emit(None)
-#         except Exception as e:
-#             self.log.emit(f"❌ Đã xảy ra lỗi trong quá trình xử lý: {e}")
-#             self.finished.emit(None)
+        except FileNotFoundError:
+            self.log.emit(f"❌ Lỗi: Không tìm thấy file tại đường dẫn: {self.input_file_path}")
+            self.finished.emit(None)
+        except Exception as e:
+            self.log.emit(f"❌ Đã xảy ra lỗi trong quá trình xử lý: {e}")
+            self.finished.emit(None)
 class Ui_MainWindow(object):
     """
     Lớp UI chính cho ứng dụng PyQt6.
@@ -1396,6 +1393,7 @@ class Ui_MainWindow(object):
         self.fsv_btn.clicked.connect(self.same_fsv_input)
         self.ip_create_time_btn = QtWidgets.QPushButton("Same IP and Create Time Report")
         self.ip_create_time_btn.clicked.connect(self.same_ip_check_out)
+
         btn_layout.addWidget(self.create_btn)
         btn_layout.addWidget(self.clear_btn)
         btn_layout.addWidget(self.fsv_btn)
@@ -1406,8 +1404,11 @@ class Ui_MainWindow(object):
         self.same_ip_reg_create_time_btn.clicked.connect(self.same_ip_reg_create_time)
         self.rsl_btn = QtWidgets.QPushButton("RSL Report")
         self.rsl_btn.clicked.connect(self.rsl_report)
+        self.similiar_address_btn = QtWidgets.QPushButton("Similiar Address Report")
+        self.similiar_address_btn.clicked.connect(self.similiar_address)
         btn_layout_row_2.addWidget(self.same_ip_reg_create_time_btn)
         btn_layout_row_2.addWidget(self.rsl_btn)
+        btn_layout_row_2.addWidget(self.similiar_address_btn)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setValue(0)
@@ -1418,7 +1419,8 @@ class Ui_MainWindow(object):
             self.fsv_btn, 
             self.ip_create_time_btn, 
             self.same_ip_reg_create_time_btn,
-            self.rsl_btn
+            self.rsl_btn,
+            self.similiar_address_btn
         ]
         
         # self.spinner = QtWidgets.QLabel()
@@ -1630,7 +1632,7 @@ class Ui_MainWindow(object):
         self._set_buttons_enabled(False)
 
         output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            None, "Lưu File Same", "same_rsl.xlsx", "Excel Files (*.xlsx)")
+            None, "Lưu File Same", "rsl.xlsx", "Excel Files (*.xlsx)")
         if not output_file_path:
             self.log_output.append("❌ Đã hủy lưu file.")
             self._set_buttons_enabled(True)
@@ -1641,7 +1643,34 @@ class Ui_MainWindow(object):
         self.thread.log.connect(self.log_output.append)
         self.thread.finished.connect(self.on_report_finished)
         self.thread.start()
+        
+        
+    def similiar_address(self):
+        """
+        Tạo báo cáo same ip check out và create time.
+        """
+        input_file_path = self.mnv.text()
+        if not input_file_path:
+            QtWidgets.QMessageBox.warning(None, "Lỗi", "Vui lòng chọn file Excel gốc.")
+            return
 
+        self.log_output.clear()
+        self.progress_bar.setValue(0)
+        self.log_output.append("🚀 Bắt đầu xử lý...")
+        self._set_buttons_enabled(False)
+
+        output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            None, "Lưu File Same", "similiar_address_report.xlsx", "Excel Files (*.xlsx)")
+        if not output_file_path:
+            self.log_output.append("❌ Đã hủy lưu file.")
+            self._set_buttons_enabled(True)
+            return
+
+        self.thread = Worker6(input_file_path, output_file_path)
+        self.thread.progress.connect(self.progress_bar.setValue)
+        self.thread.log.connect(self.log_output.append)
+        self.thread.finished.connect(self.on_report_finished)
+        self.thread.start()
 
     def toggle_dark_mode(self, state):
         if state == QtCore.Qt.CheckState.Checked.value: # Dark mode is ON
@@ -1941,9 +1970,9 @@ class MainWindowApp(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow() # Đảm bảo Ui_MainWindow được định nghĩa ở đâu đó trong code của bạn
         self.ui.setupUi(self)
         
-        self.setWindowTitle(f"Báo cáo thống kê - Phiên bản {APP_VERSION}")
+        self.setWindowTitle(f"GROUPING TOOL {APP_VERSION}")
         # Log này chỉ cần thiết cho cửa sổ chính, không phải cho quá trình khởi động/update
-        self.ui.log_output.append(f"Ứng dụng đã sẵn sàng. Phiên bản hiện tại: {APP_VERSION}")
+        self.ui.log_output.append(f"Current version: {APP_VERSION}")
 
         # KHÔNG GỌI self._start_update_check() Ở ĐÂY NỮA!
         # Việc kiểm tra cập nhật được thực hiện bởi StartupUpdateManager trước khi hiển thị cửa sổ này.
