@@ -26,7 +26,7 @@ VERSION_URL = "https://raw.githubusercontent.com/trungtien2410/bae/main/version.
 # For example, if your GitHub release tag is 'V1.2.0', and the asset is 'hang-ra-quay-ver2.4.exe',
 # then UPDATE_EXECUTABLE_NAME should be 'hang-ra-quay-ver2.4.exe'.
 UPDATE_EXECUTABLE_NAME_TEMPLATE = "baepink{}.exe" 
-
+#post
 # Helper function to construct the download URL based on the latest version tag.
 # This assumes your GitHub releases follow the pattern:
 # https://github.com/trungtien2410/hang-ra-quay/releases/download/{TAG_NAME}/{ASSET_NAME}
