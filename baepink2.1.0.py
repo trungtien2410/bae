@@ -14,10 +14,72 @@ import json
 import semver
 import tempfile
 import time
+def read_and_map_data(file_path, log_emitter):
+    """
+    Reads data from an Excel or CSV file and maps columns based on a predefined dictionary.
 
+    Args:
+        file_path (str): The path to the input file.
+        log_emitter (pyqtSignal): The signal to emit log messages.
+
+    Returns:
+        pd.DataFrame or None: The pandas DataFrame with mapped columns if successful, otherwise None.
+    """
+    try:
+        log_emitter.emit("ℹ️ Đang đọc dữ liệu từ file...")
+        file_extension = os.path.splitext(file_path)[1].lower()
+
+        if file_extension in ['.xlsx', '.xls']:
+            log_emitter.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
+            data = pd.read_excel(file_path, engine='openpyxl')
+        elif file_extension == '.csv':
+            log_emitter.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
+            data = pd.read_csv(file_path)
+        else:
+            log_emitter.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            return None
+        
+        df = pd.DataFrame(data)
+
+        # 1. Define the column mapping
+        column_mapping = {
+            'order_id': 'Order ID',
+            'create_time': 'Order Creation Time',
+            'buyer_id': 'Buyer User ID',
+            'registration_time': 'Buyer Registration Time',
+            'buyer_shipping_address': 'Buyer Recipient Address',
+            'buyer_shipping_address_state': 'Buyer Recipient Address State',
+            'buyer_shipping_address_city': 'Buyer Recipient Address City',
+            'buyer_shipping_address_district': 'Buyer Recipient Address District',
+            'recipient_phone_': 'Buyer Recipient Phone',
+            'pv_promotion_id': 'PV Promotion ID',
+            'ip_checkout': 'Checkout IP Address'
+        }
+
+        # 2. Check and rename columns
+        for new_col, old_col in column_mapping.items():
+            if old_col in df.columns:
+                df.rename(columns={old_col: new_col}, inplace=True)
+                log_emitter.emit(f"✅ Đã đổi tên cột '{old_col}' thành '{new_col}'.")
+        
+        # 3. Check for required columns after mapping
+        required_columns = list(column_mapping.keys())
+        if not all(col in df.columns for col in required_columns):
+            missing_cols = [col for col in required_columns if col not in df.columns]
+            log_emitter.emit(f"❌ Lỗi: File Excel thiếu các cột bắt buộc: {', '.join(missing_cols)}")
+            return None
+
+        return df
+
+    except FileNotFoundError:
+        log_emitter.emit(f"❌ Lỗi: Không tìm thấy file Excel tại đường dẫn: {file_path}")
+        return None
+    except Exception as e:
+        log_emitter.emit(f"❌ Đã xảy ra lỗi khi đọc file: {e}")
+        return None
 # --- APPLICATION VERSION & UPDATE CONFIGURATION ---
 # IMPORTANT: Update this version with each new release!
-APP_VERSION = "2.0.1" 
+APP_VERSION = "2.1.0" 
 
 # URL to your version.txt file on GitHub (raw content)
 VERSION_URL = "https://raw.githubusercontent.com/trungtien2410/bae/main/version.txt"
@@ -163,23 +225,10 @@ class Worker(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            # Get the file extension
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                self.data = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
-
-
-            self.df = pd.DataFrame(self.data)
-            self.df['buyer_id'] = self.df['buyer_id'].drop_duplicates()
             drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_phone_","recipient_name","buyer_shipping_address","buyer_shipping_address_district","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_id","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","fsv_voucher_code","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
             # Validate required columns
             self.df = self.df.drop(columns=drop_column, errors='ignore')
@@ -294,22 +343,10 @@ class Worker2(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            # Get the file extension
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                # You might want to add encoding='utf-8' or other encoding if you encounter issues
-                self.data = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
-            self.df = pd.DataFrame(self.data)
-            # self.df['buyer_id'] = self.df['buyer_id'].drop_duplicates()
             drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_name","buyer_shipping_address","buyer_shipping_address_district","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","fsv_voucher_code","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
             self.df = self.df.drop(columns=drop_column, errors='ignore')
             # Validate required columns
@@ -389,23 +426,10 @@ class Worker3(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            # Get the file extension
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                # You might want to add encoding='utf-8' or other encoding if you encounter issues
-                self.data = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
-            self.df = pd.DataFrame(self.data)
-            # self.original_df = self.df.copy()  # Keep a copy of the original DataFrame
-            # self.df['buyer_id'] = self.df['buyer_id'].drop_duplicates()
             drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_name","buyer_shipping_address","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
             self.df = self.df.drop(columns=drop_column, errors='ignore')
             # Validate required columns
@@ -482,23 +506,10 @@ class Worker4(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            
-            # Get the file extension
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                # You might want to add encoding='utf-8' or other encoding if you encounter issues
-                self.data = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
-
-            self.df = pd.DataFrame(self.data)
             
             # Keep 'registration_time' since it's now a condition
             drop_column = ["grass_hour", "order_id", "item_name", "seller_id", "shop_name", "status_b", 
@@ -616,23 +627,10 @@ class Worker5(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            
-            # Get the file extension
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                # You might want to add encoding='utf-8' or other encoding if you encounter issues
-                self.data = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
-
-            self.df = pd.DataFrame(self.data)
             
             # Keep 'registration_time' since it's now a condition
             drop_column = ["grass_hour", "order_id", "item_name", "seller_id", "shop_name", "status_b", 
@@ -784,23 +782,10 @@ class Worker7(QtCore.QThread):
     
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            
-            # Get the file extension
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                # You might want to add encoding='utf-8' or other encoding if you encounter issues
-                self.data = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
-            
-            self.df = pd.DataFrame(self.data)
 
             drop_column = ["grass_hour", "order_id", "item_name", "seller_id", "shop_name", "status_b", 
                            "buyer_user_name", "buyer_email", "recipient_name", 
@@ -982,19 +967,11 @@ class Worker6(QtCore.QThread):
         Main method that executes the data processing logic in the thread.
         """
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.df = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                self.df = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
+
 
             self.log.emit("ℹ️ Đang xử lý dữ liệu...")
             
@@ -1199,22 +1176,10 @@ class Worker8(QtCore.QThread):
 
     def run(self):
         try:
-            self.log.emit("ℹ️ Đang đọc dữ liệu từ file...")
-            # Get the file extension
-            file_extension = os.path.splitext(self.input_file_path)[1].lower()
-            if file_extension in ['.xlsx', '.xls']:
-                self.log.emit("ℹ️ Phát hiện file Excel. Đang đọc...")
-                self.data = pd.read_excel(self.input_file_path, engine='openpyxl')
-            elif file_extension == '.csv':
-                self.log.emit("ℹ️ Phát hiện file CSV. Đang đọc...")
-                # You might want to add encoding='utf-8' or other encoding if you encounter issues
-                self.data = pd.read_csv(self.input_file_path)
-            else:
-                self.log.emit(f"❌ Lỗi: Định dạng file không được hỗ trợ: {file_extension}. Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV (.csv).")
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
                 self.finished.emit(None)
                 return
-            self.df = pd.DataFrame(self.data)
-            # self.df['buyer_id'] = self.df['buyer_id'].drop_duplicates()
             drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_name","buyer_shipping_address","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","fsv_voucher_code","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
             self.df = self.df.drop(columns=drop_column, errors='ignore')
             # Validate required columns
@@ -1269,7 +1234,589 @@ class Worker8(QtCore.QThread):
         except Exception as e:
             self.log.emit(f"❌ Đã xảy ra lỗi: {str(e)}")
             self.finished.emit(None)
+class Worker9(QtCore.QThread):
+    """
+    Lớp con của QThread để thực hiện việc nhóm dữ liệu Same Recipient_Phone_
+    Phát tín hiệu để cập nhật tiến độ, thông báo nhật ký và trạng thái hoàn thành.
+    """
+    progress = QtCore.pyqtSignal(int)
+    log = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(object)
 
+    def __init__(self, input_file_path, output_file_path):
+        """
+        Khởi tạo luồng Worker.
+        Args:
+            input_file_path (str): Đường dẫn đến file Excel đầu vào.
+            output_file_path (str): Đường dẫn để lưu file Excel kết quả.
+        """
+        super().__init__()
+        self.input_file_path = input_file_path
+        self.output_file_path = output_file_path
+
+    def run(self):
+        try:
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
+                self.finished.emit(None)
+                return
+            drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","recipient_name","buyer_shipping_address","buyer_shipping_address_city","buyer_shipping_address_state","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","fsv_voucher_code","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
+            self.df = self.df.drop(columns=drop_column, errors='ignore')
+            # Validate required columns
+            required_columns = ['recipient_phone_']
+            if not all(col in self.df.columns for col in required_columns):
+                missing_cols = [col for col in required_columns if col not in self.df.columns]
+                self.log.emit(f"❌ Lỗi: File Excel thiếu các cột bắt buộc: {', '.join(missing_cols)}")
+                self.finished.emit(None)
+                return
+            self.log.emit("ℹ️ Đang xử lý dữ liệu...")
+
+            df_processed = self.df.dropna(subset=['recipient_phone_']).copy()
+
+            grouped_df = df_processed.groupby(['recipient_phone_'])['buyer_id'].nunique().reset_index(name='unique_buyer_ids_count')
+
+           # Filter for groups with 3 or more unique buyer_id's
+            filtered_groups = grouped_df[grouped_df['unique_buyer_ids_count'] >= 3]
+
+            final_grouped_ids = set()
+
+            # For each filtered group (that has 3 or more unique buyer_ids),
+            # get all buyer_id's from the original DataFrame that belong to these groups.
+            # This is more efficient than iterating through rows.
+            if not filtered_groups.empty:
+                # Merge original df with filtered groups to get all buyer_ids
+                merged_df = pd.merge(
+                    self.df,
+                    filtered_groups[['recipient_phone_']],
+                    on=['recipient_phone_'],
+                    how='inner'
+                )
+                final_grouped_ids.update(merged_df['buyer_id'].unique())
+
+            self.log.emit("ℹ️ Đang lưu kết quả...")
+            
+            # Create a DataFrame for the final grouped IDs (single column)
+            if final_grouped_ids:
+                df_output_ids = pd.DataFrame(list(final_grouped_ids), columns=['ID'])
+                df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
+                self.log.emit(f"✅ Đã lưu danh sách ID nhóm theo khuyến mãi tại: {self.output_file_path}")
+            else:
+                self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (recipient_phone_ >= 3 ID).")
+            
+            self.finished.emit(self.df)
+        except Exception as e:
+            self.log.emit(f"❌ Đã xảy ra lỗi: {str(e)}")
+            self.finished.emit(None)
+class Worker10(QtCore.QThread):
+    """
+    QThread subclass to generate a Same_Similar_address document in a separate thread.
+    This document identifies groups of at least 3 unique buyer_ids that share
+    similar delivery address and same order value checkout (using fuzzy matching)
+    and leverages a blocking technique for improved performance.
+    Emits signals for progress, log messages, and completion status.
+    """
+    progress = QtCore.pyqtSignal(int)
+    log = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(object) # Emits True on success, None on error/no data
+
+    # Configuration parameters
+    SIMILARITY_THRESHOLD = 85  # Adjust this value (0-100) for both name and address
+    NAME_BLOCKING_WORDS = 7   # Number of words for name blocking
+    ADDRESS_BLOCKING_WORDS = 2 # Number of words for address blocking (after cleaning)
+
+    def __init__(self, input_file_path, output_file_path):
+        """
+        Initializes the Worker10 thread.
+        
+        Args:
+            input_file_path (str): Path to the input Excel or CSV file.
+            output_file_path (str): Path to save the output Excel file.
+        """
+        super().__init__()
+        self.input_file_path = input_file_path
+        self.output_file_path = output_file_path
+        self.df = None # To store the DataFrame
+    # New helper function based on your VBA RemoveDiacritics
+    def _remove_diacritics(self, text):
+        """Removes Vietnamese diacritics (accents) from a string."""
+        if pd.isna(text) or not isinstance(text, str):
+            return text
+        
+        # Use unicodedata for general diacritic removal
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+        return text
+
+    def _clean_address_for_fuzzy_match(self, address):
+        """
+        Cleans address strings for more accurate fuzzy matching,
+        incorporating VBA-like normalization (diacritics removal, specific replacements).
+        """
+        if pd.isna(address):
+            return None
+        text = str(address).lower()
+        
+        # --- Start of VBA-like normalization ---
+        # 1. Remove diacritics (using a more robust method)
+        text = self._remove_diacritics(text)
+        
+        # 2. Specific word replacements (as in your VBA)
+        text = text.replace("phuong", "p")
+        text = text.replace("quan", "q")
+        text = text.replace("duong", "") # Removed "duong" as per your VBA logic
+        # --- End of VBA-like normalization ---
+
+        # Regex for common noise words (more specific patterns first)
+        noise_words = [
+            r'\bsố\s+nhà\b', r'\bngõ\b', r'\bđường\b', r'\bthôn\b', r'\btổ\b', r'\bkhu\s+phố\b',
+            r'\bấp\b', r'\bkdc\b', r'\bchợ\b', r'\btrường\b', r'\bquán\b', r'\bhội\s+trường\b',
+            r'\bnhà\s+văn\s+hoá\b', r'\bđội\b', r'\bbản\b', r'\bkhu\s+dân\s+cư\b',
+            r'\bchân\s+dốc\b', r'\bđèo\b', r'\bngã\s+ba\b', r'\btoà\s+nhà\b', r'\bphường\b',
+            r'\btownship\b', r'\bvillage\b', r'\bhamlet\b', r'\bstreet\b', r'\bhouse\b',
+            r'\bxóm\b', r'\bkp\b', r'\bcty\b', r'\bcông\s+ty\b', r'\bchi\s+nhánh\b',
+            r'\bchi\s+cục\b', r'\bcông\s+viên\b', r'\bkho\b', r'\bxưởng\b', r'\bkcn\b', # Industrial park
+            r'\bkhu\s+công\s+nghiệp\b', r'\bthành\s+phố\b', r'\bquận\b', r'\bhuyện\b',
+            r'\btỉnh\b'
+        ]
+        
+        # Remove common prefixes like "so 42," "s 8a"
+        text = re.sub(r'^\s*(so|s)\s+\d+[a-z]?\s*,?\s*', '', text)
+        # Remove text within parentheses
+        text = re.sub(r'\([^)]*\)', '', text)
+        # Remove common separators
+        text = re.sub(r'[.,;]', '', text)
+
+        for noise in noise_words:
+            text = re.sub(noise, ' ', text)
+
+        # Consolidate spaces and strip leading/trailing spaces (Trim in VBA)
+        text = re.sub(r'\s+', ' ', text).strip()
+        # Final non-alphanumeric removal (after noise words are gone)
+        text = re.sub(r'[^a-z0-9\s]', '', text)
+        # Final consolidation of spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        return text if text else None
+
+    def run(self):
+        """
+        Main method that executes the data processing logic in the thread.
+        """
+        try:
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
+                self.finished.emit(None)
+                return
+
+            self.log.emit("ℹ️ Đang xử lý dữ liệu...")
+            
+            required_columns = ['buyer_id', 'Order Value (Checkout Amount)', 'buyer_shipping_address_district']
+            if not all(col in self.df.columns for col in required_columns):
+                missing_cols = [col for col in required_columns if col not in self.df.columns]
+                self.log.emit(f"❌ Lỗi: File thiếu các cột bắt buộc cho báo cáo này: {', '.join(missing_cols)}")
+                self.finished.emit(None)
+                return
+
+            # Drop rows with any NaN in required columns before further processing
+            initial_rows = len(self.df)
+            self.df.dropna(subset=required_columns, inplace=True)
+            if len(self.df) < initial_rows:
+                self.log.emit(f"ℹ️ Đã loại bỏ {initial_rows - len(self.df)} hàng có giá trị thiếu trong các cột bắt buộc.")
+
+            if self.df.empty:
+                self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi loại bỏ các hàng thiếu thông tin bắt buộc.")
+                self.finished.emit(None)
+                return
+
+            self.log.emit("ℹ️ Đang chuẩn hóa địa chỉ...")
+            self.df['cleaned_address'] = self.df['buyer_shipping_address_district'].apply(self._clean_address_for_fuzzy_match)
+
+            # Drop rows where normalization/cleaning resulted in None
+            initial_rows_after_norm = len(self.df)
+            self.df.dropna(subset=['cleaned_address'], inplace=True)
+            if len(self.df) < initial_rows_after_norm:
+                self.log.emit(f"ℹ️ Đã loại bỏ {initial_rows_after_norm - len(self.df)} hàng có tên hoặc địa chỉ không hợp lệ sau chuẩn hóa.")
+            
+            if self.df.empty:
+                self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi chuẩn hóa địa chỉ.")
+                self.finished.emit(None)
+                return
+            
+            # --- Blocking Step for improved performance ---
+            self.log.emit("ℹ️ Đang tạo các khối (block) dữ liệu để so sánh hiệu quả hơn...")
+            
+            # Create a unique ID for each original row, to easily refer back to it
+            self.df['original_index'] = self.df.index 
+            
+            # Use 'records' for efficient iteration in Python loop
+            records = self.df[['original_index', 'cleaned_address', 'buyer_id', 'Order Value (Checkout Amount)']].to_dict('records')
+
+            # The hashmap/dictionary for blocking
+            # Key: (address_block, order_value) -> Value: list of record_dicts
+            blocks = {}
+
+            for record in records:
+                address_cleaned = record['cleaned_address']
+                order_value = record['Order Value (Checkout Amount)']
+
+                if address_cleaned is None or pd.isna(order_value):
+                    continue # Skip records that couldn't be normalized/cleaned or have no value
+                
+                address_words = address_cleaned.split()
+                address_block_key = " ".join(address_words[:self.ADDRESS_BLOCKING_WORDS])
+
+                blocking_key = (address_block_key, order_value)
+                
+                if blocking_key not in blocks:
+                    blocks[blocking_key] = []
+                blocks[blocking_key].append(record)
+
+            self.log.emit(f"ℹ️ Đã tạo {len(blocks)} khối dữ liệu.")
+            # --- End Blocking Step ---
+
+            final_grouped_buyer_ids = set()
+            
+            # To keep track of which original_indices have been added to a final group
+            processed_original_indices = set() 
+
+            total_blocks = len(blocks)
+            processed_blocks_count = 0
+
+            self.log.emit("ℹ️ Bắt đầu phân tích nhóm trong từng khối...")
+
+            for blocking_key, block_records in blocks.items():
+                processed_blocks_count += 1
+                # Update progress, ensuring it doesn't go over 100%
+                self.progress.emit(min(99, int((processed_blocks_count / total_blocks) * 100)))
+
+                # If a block is too small, it can't meet the >=3 unique buyer_id criteria anyway
+                if len(block_records) < 3:
+                    continue
+
+                # Within each block, perform pairwise fuzzy comparison
+                block_processed_record_indices = set() 
+
+                for i in range(len(block_records)):
+                    current_record_in_block = block_records[i]
+                    current_original_index = current_record_in_block['original_index']
+
+                    if current_original_index in block_processed_record_indices or \
+                       current_original_index in processed_original_indices:
+                        continue
+                    
+                    current_address = current_record_in_block['cleaned_address']
+                    current_order_value = current_record_in_block['Order Value (Checkout Amount)']
+                    
+                    current_cluster_original_indices = [current_original_index]
+                    current_cluster_buyer_ids = [current_record_in_block['buyer_id']]
+
+                    for j in range(i + 1, len(block_records)):
+                        other_record_in_block = block_records[j]
+                        other_original_index = other_record_in_block['original_index']
+
+                        if other_original_index in block_processed_record_indices or \
+                           other_original_index in processed_original_indices:
+                            continue
+
+                        other_address = other_record_in_block['cleaned_address']
+                        other_order_value = other_record_in_block['Order Value (Checkout Amount)']
+
+                        # Ensure addresses and values are not None before comparing
+                        if current_address is None or other_address is None or \
+                           pd.isna(current_order_value) or pd.isna(other_order_value):
+                            continue 
+
+                        address_similarity = fuzz.token_sort_ratio(current_address, other_address)
+                        is_exact_address_match = (current_address == other_address)
+                        is_same_order_value = (current_order_value == other_order_value)
+                        
+                        if (is_exact_address_match or address_similarity >= self.SIMILARITY_THRESHOLD) and is_same_order_value:
+                            current_cluster_original_indices.append(other_original_index)
+                            current_cluster_buyer_ids.append(other_record_in_block['buyer_id'])
+                    
+                    # After comparing current_record with all others in the block, evaluate the cluster
+                    unique_ids_in_cluster = set(current_cluster_buyer_ids)
+                    
+                    if len(unique_ids_in_cluster) >= 3:
+                        final_grouped_buyer_ids.update(unique_ids_in_cluster)
+                        processed_original_indices.update(current_cluster_original_indices)
+                        block_processed_record_indices.update(current_cluster_original_indices)
+                        
+                        self.log.emit(f"✅ Tìm thấy nhóm hợp lệ trong khối '{blocking_key}' (địa chỉ và giá trị đơn hàng khớp). {len(unique_ids_in_cluster)} ID duy nhất.")
+
+            self.log.emit("ℹ️ Đang lưu kết quả...")
+            self.progress.emit(100) # Ensure progress is 100% at the end
+
+            if final_grouped_buyer_ids:
+                df_output_ids = pd.DataFrame(list(final_grouped_buyer_ids), columns=['buyer_id'])
+                df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
+                self.log.emit(f"✅ Đã lưu danh sách ID nhóm tại: {self.output_file_path}")
+            else:
+                self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (ít nhất 3 ID riêng biệt với địa chỉ tương đồng và giá trị đơn hàng giống nhau).")
+            
+            self.finished.emit(True) # Indicate successful completion
+            
+        except FileNotFoundError:
+            self.log.emit(f"❌ Lỗi: Không tìm thấy file tại đường dẫn: {self.input_file_path}")
+            self.finished.emit(None)
+        except Exception as e:
+            self.log.emit(f"❌ Đã xảy ra lỗi trong quá trình xử lý: {e}")
+            self.finished.emit(None)
+class Worker11(QtCore.QThread):
+    """
+    QThread subclass to generate a Same_Similar_address document in a separate thread.
+    This document identifies groups of at least 3 unique buyer_ids that share
+    similar delivery address (using fuzzy matching) and an order value checkout
+    with a difference of no more than 300,000 VND.
+    It leverages a blocking technique for improved performance.
+    Emits signals for progress, log messages, and completion status.
+    """
+    progress = QtCore.pyqtSignal(int)
+    log = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(object) # Emits True on success, None on error/no data
+
+    # Configuration parameters
+    SIMILARITY_THRESHOLD = 85  # Adjust this value (0-100) for address
+    ADDRESS_BLOCKING_WORDS = 2 # Number of words for address blocking (after cleaning)
+    ORDER_VALUE_TOLERANCE = 300000 # Max difference for Order Value (Checkout Amount)
+
+    def __init__(self, input_file_path, output_file_path):
+        """
+        Initializes the Worker11 thread.
+        
+        Args:
+            input_file_path (str): Path to the input Excel or CSV file.
+            output_file_path (str): Path to save the output Excel file.
+        """
+        super().__init__()
+        self.input_file_path = input_file_path
+        self.output_file_path = output_file_path
+        self.df = None # To store the DataFrame
+
+    # Helper function based on your VBA RemoveDiacritics
+    def _remove_diacritics(self, text):
+        """Removes Vietnamese diacritics (accents) from a string."""
+        if pd.isna(text) or not isinstance(text, str):
+            return text
+        
+        # Use unicodedata for general diacritic removal
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+        return text
+
+    def _clean_address_for_fuzzy_match(self, address):
+        """
+        Cleans address strings for more accurate fuzzy matching,
+        incorporating VBA-like normalization (diacritics removal, specific replacements).
+        """
+        if pd.isna(address):
+            return None
+        text = str(address).lower()
+        
+        # --- Start of VBA-like normalization ---
+        # 1. Remove diacritics (using a more robust method)
+        text = self._remove_diacritics(text)
+        
+        # 2. Specific word replacements (as in your VBA)
+        text = text.replace("phuong", "p")
+        text = text.replace("quan", "q")
+        text = text.replace("duong", "") # Removed "duong" as per your VBA logic
+        # --- End of VBA-like normalization ---
+
+        # Regex for common noise words (more specific patterns first)
+        noise_words = [
+            r'\bsố\s+nhà\b', r'\bngõ\b', r'\bđường\b', r'\bthôn\b', r'\btổ\b', r'\bkhu\s+phố\b',
+            r'\bấp\b', r'\bkdc\b', r'\bchợ\b', r'\btrường\b', r'\bquán\b', r'\bhội\s+trường\b',
+            r'\bnhà\s+văn\s+hoá\b', r'\bđội\b', r'\bbản\b', r'\bkhu\s+dân\s+cư\b',
+            r'\bchân\s+dốc\b', r'\bđèo\b', r'\bngã\s+ba\b', r'\btoà\s+nhà\b', r'\bphường\b',
+            r'\btownship\b', r'\bvillage\b', r'\bhamlet\b', r'\bstreet\b', r'\bhouse\b',
+            r'\bxóm\b', r'\bkp\b', r'\bcty\b', r'\bcông\s+ty\b', r'\bchi\s+nhánh\b',
+            r'\bchi\s+cục\b', r'\bcông\s+viên\b', r'\bkho\b', r'\bxưởng\b', r'\bkcn\b', # Industrial park
+            r'\bkhu\s+công\s+nghiệp\b', r'\bthành\s+phố\b', r'\bquận\b', r'\bhuyện\b',
+            r'\btỉnh\b'
+        ]
+        
+        # Remove common prefixes like "so 42," "s 8a"
+        text = re.sub(r'^\s*(so|s)\s+\d+[a-z]?\s*,?\s*', '', text)
+        # Remove text within parentheses
+        text = re.sub(r'\([^)]*\)', '', text)
+        # Remove common separators
+        text = re.sub(r'[.,;]', '', text)
+
+        for noise in noise_words:
+            text = re.sub(noise, ' ', text)
+
+        # Consolidate spaces and strip leading/trailing spaces (Trim in VBA)
+        text = re.sub(r'\s+', ' ', text).strip()
+        # Final non-alphanumeric removal (after noise words are gone)
+        text = re.sub(r'[^a-z0-9\s]', '', text)
+        # Final consolidation of spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        return text if text else None
+
+    def run(self):
+        """
+        Main method that executes the data processing logic in the thread.
+        """
+        try:
+            # Assuming read_and_map_data is defined elsewhere
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
+                self.finished.emit(None)
+                return
+
+            self.log.emit("ℹ️ Đang xử lý dữ liệu...")
+            
+            required_columns = ['buyer_id', 'Order Value (Checkout Amount)', 'buyer_shipping_address_district']
+            if not all(col in self.df.columns for col in required_columns):
+                missing_cols = [col for col in required_columns if col not in self.df.columns]
+                self.log.emit(f"❌ Lỗi: File thiếu các cột bắt buộc cho báo cáo này: {', '.join(missing_cols)}")
+                self.finished.emit(None)
+                return
+
+            # Drop rows with any NaN in required columns before further processing
+            initial_rows = len(self.df)
+            self.df.dropna(subset=required_columns, inplace=True)
+            if len(self.df) < initial_rows:
+                self.log.emit(f"ℹ️ Đã loại bỏ {initial_rows - len(self.df)} hàng có giá trị thiếu trong các cột bắt buộc.")
+
+            if self.df.empty:
+                self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi loại bỏ các hàng thiếu thông tin bắt buộc.")
+                self.finished.emit(None)
+                return
+
+            self.log.emit("ℹ️ Đang chuẩn hóa địa chỉ...")
+            self.df['cleaned_address'] = self.df['buyer_shipping_address_district'].apply(self._clean_address_for_fuzzy_match)
+
+            # Drop rows where normalization/cleaning resulted in None
+            initial_rows_after_norm = len(self.df)
+            self.df.dropna(subset=['cleaned_address'], inplace=True)
+            if len(self.df) < initial_rows_after_norm:
+                self.log.emit(f"ℹ️ Đã loại bỏ {initial_rows_after_norm - len(self.df)} hàng có tên hoặc địa chỉ không hợp lệ sau chuẩn hóa.")
+            
+            if self.df.empty:
+                self.log.emit("ℹ️ Không có dữ liệu hợp lệ sau khi chuẩn hóa địa chỉ.")
+                self.finished.emit(None)
+                return
+            
+            # --- Blocking Step for improved performance ---
+            self.log.emit("ℹ️ Đang tạo các khối (block) dữ liệu để so sánh hiệu quả hơn...")
+            
+            # Create a unique ID for each original row, to easily refer back to it
+            self.df['original_index'] = self.df.index 
+            
+            # Use 'records' for efficient iteration in Python loop
+            records = self.df[['original_index', 'cleaned_address', 'buyer_id', 'Order Value (Checkout Amount)']].to_dict('records')
+
+            # The hashmap/dictionary for blocking
+            # Key: (address_block) -> Value: list of record_dicts
+            blocks = {}
+
+            for record in records:
+                address_cleaned = record['cleaned_address']
+                
+                if address_cleaned is None:
+                    continue # Skip records that couldn't be normalized/cleaned
+                
+                address_words = address_cleaned.split()
+                address_block_key = " ".join(address_words[:self.ADDRESS_BLOCKING_WORDS])
+
+                blocking_key = (address_block_key,)
+                
+                if blocking_key not in blocks:
+                    blocks[blocking_key] = []
+                blocks[blocking_key].append(record)
+
+            self.log.emit(f"ℹ️ Đã tạo {len(blocks)} khối dữ liệu.")
+            # --- End Blocking Step ---
+
+            final_grouped_buyer_ids = set()
+            
+            # To keep track of which original_indices have been added to a final group
+            processed_original_indices = set() 
+
+            total_blocks = len(blocks)
+            processed_blocks_count = 0
+
+            self.log.emit("ℹ️ Bắt đầu phân tích nhóm trong từng khối...")
+
+            for blocking_key, block_records in blocks.items():
+                processed_blocks_count += 1
+                # Update progress, ensuring it doesn't go over 100%
+                self.progress.emit(min(99, int((processed_blocks_count / total_blocks) * 100)))
+
+                # If a block is too small, it can't meet the >=3 unique buyer_id criteria anyway
+                if len(block_records) < 3:
+                    continue
+
+                # Within each block, perform pairwise fuzzy comparison
+                block_processed_record_indices = set() 
+
+                for i in range(len(block_records)):
+                    current_record_in_block = block_records[i]
+                    current_original_index = current_record_in_block['original_index']
+
+                    if current_original_index in block_processed_record_indices or \
+                       current_original_index in processed_original_indices:
+                        continue
+                    
+                    current_address = current_record_in_block['cleaned_address']
+                    current_order_value = current_record_in_block['Order Value (Checkout Amount)']
+                    
+                    current_cluster_original_indices = [current_original_index]
+                    current_cluster_buyer_ids = [current_record_in_block['buyer_id']]
+
+                    for j in range(i + 1, len(block_records)):
+                        other_record_in_block = block_records[j]
+                        other_original_index = other_record_in_block['original_index']
+
+                        if other_original_index in block_processed_record_indices or \
+                           other_original_index in processed_original_indices:
+                            continue
+
+                        other_address = other_record_in_block['cleaned_address']
+                        other_order_value = other_record_in_block['Order Value (Checkout Amount)']
+
+                        # Ensure addresses and values are not None before comparing
+                        if current_address is None or other_address is None or \
+                           pd.isna(current_order_value) or pd.isna(other_order_value):
+                            continue 
+
+                        address_similarity = fuzz.token_sort_ratio(current_address, other_address)
+                        is_exact_address_match = (current_address == other_address)
+                        is_within_tolerance = abs(current_order_value - other_order_value) <= self.ORDER_VALUE_TOLERANCE
+                        
+                        if (is_exact_address_match or address_similarity >= self.SIMILARITY_THRESHOLD) and is_within_tolerance:
+                            current_cluster_original_indices.append(other_original_index)
+                            current_cluster_buyer_ids.append(other_record_in_block['buyer_id'])
+                    
+                    # After comparing current_record with all others in the block, evaluate the cluster
+                    unique_ids_in_cluster = set(current_cluster_buyer_ids)
+                    
+                    if len(unique_ids_in_cluster) >= 3:
+                        final_grouped_buyer_ids.update(unique_ids_in_cluster)
+                        processed_original_indices.update(current_cluster_original_indices)
+                        block_processed_record_indices.update(current_cluster_original_indices)
+                        
+                        self.log.emit(f"✅ Tìm thấy nhóm hợp lệ trong khối '{blocking_key}' (địa chỉ tương đồng và giá trị đơn hàng chênh lệch không quá {self.ORDER_VALUE_TOLERANCE:,} VND). {len(unique_ids_in_cluster)} ID duy nhất.")
+
+            self.log.emit("ℹ️ Đang lưu kết quả...")
+            self.progress.emit(100) # Ensure progress is 100% at the end
+
+            if final_grouped_buyer_ids:
+                df_output_ids = pd.DataFrame(list(final_grouped_buyer_ids), columns=['buyer_id'])
+                df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
+                self.log.emit(f"✅ Đã lưu danh sách ID nhóm tại: {self.output_file_path}")
+            else:
+                self.log.emit(f"ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (ít nhất 3 ID riêng biệt với địa chỉ tương đồng và giá trị đơn hàng chênh lệch không quá {self.ORDER_VALUE_TOLERANCE:,} VND).")
+            
+            self.finished.emit(True) # Indicate successful completion
+            
+        except FileNotFoundError:
+            self.log.emit(f"❌ Lỗi: Không tìm thấy file tại đường dẫn: {self.input_file_path}")
+            self.finished.emit(None)
+        except Exception as e:
+            self.log.emit(f"❌ Đã xảy ra lỗi trong quá trình xử lý: {e}")
+            self.finished.emit(None)
 class Ui_MainWindow(object):
     """
     Lớp UI chính cho ứng dụng PyQt6.
@@ -1611,6 +2158,16 @@ class Ui_MainWindow(object):
         btn_layout_row_2.addWidget(self.rsl_btn)
         btn_layout_row_2.addWidget(self.similiar_address_btn)
         btn_layout_row_2.addWidget(self.same_prm_phone_district_btn)
+        self.same_recipient_phone_btn = QtWidgets.QPushButton("Same Recipient Phone Report")
+        self.same_recipient_phone_btn.clicked.connect(self.same_recipient_phone)
+        self.same_order_value_check_out_and_similar_address_btn = QtWidgets.QPushButton("Same Order Value Check Out + Similar Address Report")
+        self.same_order_value_check_out_and_similar_address_btn.clicked.connect(self.same_order_value_check_out_and_similar_address)
+        self.tolerant_address_btn = QtWidgets.QPushButton("Tolerant Address Report")
+        self.tolerant_address_btn.clicked.connect(self.tolerant_address)
+        btn_layout_row_3 = QtWidgets.QHBoxLayout()
+        btn_layout_row_3.addWidget(self.same_recipient_phone_btn)
+        btn_layout_row_3.addWidget(self.same_order_value_check_out_and_similar_address_btn)
+        btn_layout_row_3.addWidget(self.tolerant_address_btn)
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setValue(0)
@@ -1623,7 +2180,10 @@ class Ui_MainWindow(object):
             self.same_ip_reg_create_time_btn,
             self.rsl_btn,
             self.similiar_address_btn,
-            self.same_prm_phone_district_btn
+            self.same_prm_phone_district_btn,
+            self.same_recipient_phone_btn,
+            self.same_order_value_check_out_and_similar_address_btn,
+            self.tolerant_address_btn
         ]
         
         # self.spinner = QtWidgets.QLabel()
@@ -1641,6 +2201,7 @@ class Ui_MainWindow(object):
         tab1_layout.addLayout(label_mnv_layout)
         tab1_layout.addLayout(btn_layout)
         tab1_layout.addLayout(btn_layout_row_2)
+        tab1_layout.addLayout(btn_layout_row_3)
         tab1_layout.addWidget(self.progress_bar)
         tab1_layout.addWidget(self.log_output)
         # tab1_layout.addWidget(self.spinner)
@@ -1905,6 +2466,84 @@ class Ui_MainWindow(object):
         self.thread.finished.connect(self.on_report_finished)
         self.thread.start()
 
+    def same_recipient_phone(self):
+        """
+        Tạo báo cáo same ip check out và create time.
+        """
+        input_file_path = self.mnv.text()
+        if not input_file_path:
+            QtWidgets.QMessageBox.warning(None, "Lỗi", "Vui lòng chọn file Excel gốc.")
+            return
+
+        self.log_output.clear()
+        self.progress_bar.setValue(0)
+        self.log_output.append("🚀 Bắt đầu xử lý...")
+        self._set_buttons_enabled(False)
+
+        output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            None, "Lưu File Same", "same_recipient_phone.xlsx", "Excel Files (*.xlsx)")
+        if not output_file_path:
+            self.log_output.append("❌ Đã hủy lưu file.")
+            self._set_buttons_enabled(True)
+            return
+
+        self.thread = Worker9(input_file_path, output_file_path)
+        self.thread.progress.connect(self.progress_bar.setValue)
+        self.thread.log.connect(self.log_output.append)
+        self.thread.finished.connect(self.on_report_finished)
+        self.thread.start()
+    def same_order_value_check_out_and_similar_address(self):
+        """
+        Tạo báo cáo same order value check out và similar address.
+        """
+        input_file_path = self.mnv.text()
+        if not input_file_path:
+            QtWidgets.QMessageBox.warning(None, "Lỗi", "Vui lòng chọn file Excel gốc.")
+            return
+
+        self.log_output.clear()
+        self.progress_bar.setValue(0)
+        self.log_output.append("🚀 Bắt đầu xử lý...")
+        self._set_buttons_enabled(False)
+
+        output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            None, "Lưu File Same", "same_order_value_check_out_and_similar_address.xlsx", "Excel Files (*.xlsx)")
+        if not output_file_path:
+            self.log_output.append("❌ Đã hủy lưu file.")
+            self._set_buttons_enabled(True)
+            return
+
+        self.thread = Worker10(input_file_path, output_file_path)
+        self.thread.progress.connect(self.progress_bar.setValue)
+        self.thread.log.connect(self.log_output.append)
+        self.thread.finished.connect(self.on_report_finished)
+        self.thread.start()
+    def tolerant_address(self):
+        """
+        Tạo báo cáo tolerant address.
+        """
+        input_file_path = self.mnv.text()
+        if not input_file_path:
+            QtWidgets.QMessageBox.warning(None, "Lỗi", "Vui lòng chọn file Excel gốc.")
+            return
+
+        self.log_output.clear()
+        self.progress_bar.setValue(0)
+        self.log_output.append("🚀 Bắt đầu xử lý...")
+        self._set_buttons_enabled(False)
+
+        output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            None, "Lưu File Same", "tolerant_address.xlsx", "Excel Files (*.xlsx)")
+        if not output_file_path:
+            self.log_output.append("❌ Đã hủy lưu file.")
+            self._set_buttons_enabled(True)
+            return
+
+        self.thread = Worker11(input_file_path, output_file_path)
+        self.thread.progress.connect(self.progress_bar.setValue)
+        self.thread.log.connect(self.log_output.append)
+        self.thread.finished.connect(self.on_report_finished)
+        self.thread.start()
     def toggle_dark_mode(self, state):
         if state == QtCore.Qt.CheckState.Checked.value: # Dark mode is ON
             self.is_dark_mode = True
