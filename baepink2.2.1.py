@@ -2443,6 +2443,11 @@ class Ui_MainWindow(object):
                 padding-bottom: 10px;
             }
             /* Styles for the dark mode toggle switch (checkbox) */
+            QCheckBox::text {
+                color: #ad1457; /* Darker Pink - Checkbox Text */
+                font-size: 13px;
+                padding-left: 8px;
+            }
             QCheckBox::indicator {
                 width: 25px;
                 height: 25px;
@@ -2571,26 +2576,71 @@ class Ui_MainWindow(object):
                 color: #00aeef; /* Lighter purple */
                 padding-bottom: 10px;
             }
-            /* Styles for the dark mode toggle switch (checkbox) */
+            /* --- Styles for the Pure QSS Sliding Switch (No Images) --- */
+            QCheckBox {
+                /* Ensure the text color is correct for the light/dark mode state */
+                color: #263238;
+                font-weight: bold;
+                spacing: 5px; /* Adjust spacing between indicator and text */
+            }
+
             QCheckBox::indicator {
-                width: 25px;
+                /* 1. Define the wide track size and shape */
+                width: 25px; 
                 height: 25px;
-                border-radius: 12px;
+                border-radius: 12px; /* Perfect pill shape */
+                border: 1px solid #546e7a; /* Default border */
             }
+
+            /* --- UNCHECKED STATE (Switch OFF - Grey Track, Dark Thumb on Left) --- */
             QCheckBox::indicator:unchecked {
-                background-color: #546e7a; /* Grey Blue - Unchecked */
-                border: 1px solid #8e24aa;
+                /* Track color: Grey Blue */
+                background-color: #546e7a;
+                border-color: #546e7a;
+                
+                /* 2. Create the Dark Thumb on the LEFT using a CONIC gradient trick */
+                /* This creates a small dark circle on the left edge */
+                background: qconicalgradient(
+                    cx:0.3, cy:0.5, angle:0, 
+                    stop:0.0 #37474f,      /* Darker color for the thumb */
+                    stop:0.35 #37474f,
+                    stop:0.35 #546e7a,     /* Transition back to track color */
+                    stop:1.0 #546e7a
+                );
+                
+                /* Optional: Small inner shadow for depth (cannot replicate inset perfectly) */
+                /* box-shadow is not supported, so rely on the gradient */
             }
+
             QCheckBox::indicator:unchecked:hover {
-                background-color: #6a1b9a;
+                /* Hover effect */
+                border-color: #00aeef;
             }
+            QCheckBox::checked {
+                color: #ffffff; /* Light Grey text when checked */
+            }
+            /* --- CHECKED STATE (Switch ON - Theme Blue Track, Light Thumb on Right) --- */
             QCheckBox::indicator:checked {
-                background-color: #00aeef; /* Light Purple - Checked */
-                border: 1px solid #546e7a;
+                /* Track color: Your theme's primary blue */
+                background-color: #00aeef; 
+                border-color: #00aeef;
+                
+                /* 2. Create the Light Thumb on the RIGHT using a CONIC gradient trick */
+                /* We adjust the cx/cy and color stops to position the thumb on the right */
+                background: qconicalgradient(
+                    cx:0.7, cy:0.5, angle:0, 
+                    stop:0.0 #00aeef,       /* Start with track color */
+                    stop:0.65 #00aeef,
+                    stop:0.65 #eceff1,      /* Transition to Light Grey/White for the thumb */
+                    stop:1.0 #eceff1
+                );
             }
-            QCheckBox::indicator:checked:hover {
-                background-color: #0281b0;
-            }
+
+            # QCheckBox::indicator:checked:hover {
+            #     /* Hover effect */
+            #     background-color: #0281b0;
+            #     border-color: #0281b0;
+            # }
         """
         self.is_dark_mode = False # Track current mode
         MainWindow.setStyleSheet(self.light_mode_stylesheet) # Apply initial stylesheet
@@ -2662,11 +2712,11 @@ class Ui_MainWindow(object):
         btn_layout_column1.addWidget(self.same_ip_reg_create_time_btn)
         
         checkbox_layout_column1 = QtWidgets.QVBoxLayout()
-        self.clear_btn_checkbox = QtWidgets.QCheckBox() #"Same Promotion + Phone Report"
-        self.fsv_btn_checkbox = QtWidgets.QCheckBox() #"Same FSV Report"
-        self.ip_create_time_btn_checkbox = QtWidgets.QCheckBox() #"Same IP and Create Time Report"
-        self.same_prm_phone_district_btn_checkbox = QtWidgets.QCheckBox() #"Same Promotion + Phone + District Report"
-        self.same_ip_reg_create_time_btn_checkbox = QtWidgets.QCheckBox() #"Same IP and Create + RegTime Report"
+        self.clear_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same Promotion + Phone Report"
+        self.fsv_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same FSV Report"
+        self.ip_create_time_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same IP and Create Time Report"
+        self.same_prm_phone_district_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same Promotion + Phone + District Report"
+        self.same_ip_reg_create_time_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same IP and Create + RegTime Report"
         checkbox_layout_column1.addWidget(self.clear_btn_checkbox)
         checkbox_layout_column1.addWidget(self.fsv_btn_checkbox)
         checkbox_layout_column1.addWidget(self.ip_create_time_btn_checkbox)
@@ -2692,11 +2742,11 @@ class Ui_MainWindow(object):
         btn_layout_column2.addWidget(self.similiar_address_btn)
 
         checkbox_layout_column2 = QtWidgets.QVBoxLayout()
-        self.rsl_btn_checkbox = QtWidgets.QCheckBox() #"RSL Report"
-        self.similiar_address_btn_checkbox = QtWidgets.QCheckBox() #"Similiar Address Report"
-        self.same_recipient_phone_btn_checkbox = QtWidgets.QCheckBox() #"Same Recipient Phone Report"
-        self.same_order_value_check_out_and_similar_address_btn_checkbox = QtWidgets.QCheckBox() #"Same Order Value Check Out + Similar Address Report"
-        self.tolerant_address_btn_checkbox = QtWidgets.QCheckBox() #"Tolerant Address Report"
+        self.rsl_btn_checkbox = QtWidgets.QCheckBox('Checked') #"RSL Report"
+        self.similiar_address_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Similiar Address Report"
+        self.same_recipient_phone_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same Recipient Phone Report"
+        self.same_order_value_check_out_and_similar_address_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same Order Value Check Out + Similar Address Report"
+        self.tolerant_address_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Tolerant Address Report"
         checkbox_layout_column2.addWidget(self.rsl_btn_checkbox)
         checkbox_layout_column2.addWidget(self.similiar_address_btn_checkbox)
         checkbox_layout_column2.addWidget(self.same_recipient_phone_btn_checkbox)
@@ -2726,11 +2776,11 @@ class Ui_MainWindow(object):
         btn_layout_column3.addWidget(self.same_ip_create_reg_time_nuv_btn)
 
         checkbox_layout_column3 = QtWidgets.QVBoxLayout()
-        self.create_btn_checkbox = QtWidgets.QCheckBox() #"N3 Report"
-        self.same_phone_and_district_btn_checkbox = QtWidgets.QCheckBox() #"Same Phone and District Report"
-        self.same_name_district_city_state_btn_checkbox = QtWidgets.QCheckBox() #"Same Name + District + City + State Report"
-        self.ip_create_time_district_city_state_btn_checkbox = QtWidgets.QCheckBox() #"Same IP and Create Time + District + City + State Report"
-        self.same_ip_create_reg_time_nuv_btn_checkbox = QtWidgets.QCheckBox() #"Same IP and Create + RegTime Nuv Report"
+        self.create_btn_checkbox = QtWidgets.QCheckBox('Checked') #"N3 Report"
+        self.same_phone_and_district_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same Phone and District Report"
+        self.same_name_district_city_state_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same Name + District + City + State Report"
+        self.ip_create_time_district_city_state_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same IP and Create Time + District + City + State Report"
+        self.same_ip_create_reg_time_nuv_btn_checkbox = QtWidgets.QCheckBox('Checked') #"Same IP and Create + RegTime Nuv Report"
         checkbox_layout_column3.addWidget(self.create_btn_checkbox)
         checkbox_layout_column3.addWidget(self.same_phone_and_district_btn_checkbox)
         checkbox_layout_column3.addWidget(self.same_name_district_city_state_btn_checkbox)
