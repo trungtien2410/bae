@@ -54,8 +54,8 @@ def read_and_map_data(file_path, log_emitter):
             'recipient_phone_': 'Buyer Recipient Phone',
             'pv_promotion_id': 'PV Promotion ID',
             'ip_checkout': 'Checkout IP Address',
-            'Items': 'item_amount',
-            'Order Value (Checkout Amount)': 'gmv_vnd'
+            'item_amount': '# Items',
+            'gmv_vnd': 'Order Value (Checkout Amount)'
         }
 
         # 2. Check and rename columns
@@ -81,7 +81,7 @@ def read_and_map_data(file_path, log_emitter):
         return None
 # --- APPLICATION VERSION & UPDATE CONFIGURATION ---
 # IMPORTANT: Update this version with each new release!
-APP_VERSION = "2.2.2" 
+APP_VERSION = "3.0.2" 
 
 # URL to your version.txt file on GitHub (raw content)
 VERSION_URL = "https://raw.githubusercontent.com/trungtien2410/bae/main/version.txt"
@@ -111,7 +111,7 @@ class CheckUpdateThread(QtCore.QThread):
 
     def run(self):
         try:
-            response = requests.get(VERSION_URL, timeout=5)
+            response = requests.get(VERSION_URL, timeout=30)
             response.raise_for_status() # Raise an exception for HTTP errors
             latest_version = response.text.strip()
             self.check_finished.emit(True, latest_version)
@@ -329,12 +329,12 @@ class Worker2(QtCore.QThread):
 
             grouped_df = df_processed.groupby(['recipient_phone_', 'fsv_voucher_code', 'buyer_shipping_address_district'])['buyer_id'].nunique().reset_index(name='unique_buyer_ids_count')
 
-            # Filter for groups with 3 or more unique buyer_id's
+            # Filter for groups with 5 or more unique buyer_id's
             filtered_groups = grouped_df[grouped_df['unique_buyer_ids_count'] >= 5]
 
             final_grouped_ids = set()
 
-            # For each filtered group (that has 3 or more unique buyer_ids),
+            # For each filtered group (that has 5 or more unique buyer_ids),
             # get all buyer_id's from the original DataFrame that belong to these groups.
             # This is more efficient than iterating through rows.
             if not filtered_groups.empty:
@@ -564,40 +564,29 @@ class Worker4(QtCore.QThread):
             self.log.emit(f"❌ Đã xảy ra lỗi: {str(e)}")
             self.finished.emit(None)
 class Worker5(QtCore.QThread):
-
-    """
-    Lớp con của QThread để thực hiện việc nhóm dữ liệu RSL items
-    Phát tín hiệu để cập nhật tiến độ, thông báo nhật ký và trạng thái hoàn thành.
-    """
     progress = QtCore.pyqtSignal(int)
     log = QtCore.pyqtSignal(str)
     finished = QtCore.pyqtSignal(object)
 
     def __init__(self, input_file_path, output_file_path):
-        """
-        Khởi tạo luồng Worker.
-        Args:
-            input_file_path (str): Đường dẫn đến file Excel đầu vào.
-            output_file_path (str): Đường dẫn để lưu file Excel kết quả.
-        """
         super().__init__()
         self.input_file_path = input_file_path
         self.output_file_path = output_file_path
 
     def run(self):
         try:
-            # Assuming read_and_map_data is defined elsewhere
+            # Giả định hàm read_and_map_data đã được định nghĩa
             self.df = read_and_map_data(self.input_file_path, self.log)
             if self.df is None:
                 self.finished.emit(None)
                 return
             
-            # Keep 'registration_time' since it's now a condition
+            # Giữ lại gmv_vnd để tính toán
             drop_column = ["grass_hour", "order_id", "item_name", "seller_id", "shop_name", "status_b", 
                             "buyer_user_name", "buyer_email", "recipient_phone_", "recipient_name", 
                             "buyer_shipping_address", "buyer_shipping_address_district", 
                             "buyer_shipping_address_city",  
-                            "address_modified_time_latest", "sz_device", "N3", "gmv_vnd", 
+                            "address_modified_time_latest", "sz_device", "N3", 
                             "pv_promotion_id", "pv_promotion_cap", "pv_promotion_name", 
                             "pv_voucher_code", "pv_rebate_by_shopee_vnd", "is_nuv", "sv_promotion_id", 
                             "sv_voucher_code", "coin_earn", "coin_used_cash_amt", "fsv_voucher_code", 
@@ -607,76 +596,68 @@ class Worker5(QtCore.QThread):
             
             self.df = self.df.drop(columns=drop_column, errors='ignore')
             
-            # Add 'registration_time' to required columns
-            required_columns = ["buyer_shipping_address_state", 'buyer_id','item_amount']
+            # Các cột bắt buộc cho logic mới
+            required_columns = ["buyer_shipping_address_state", "buyer_id", "item_amount", "gmv_vnd"]
             if not all(col in self.df.columns for col in required_columns):
                 missing_cols = [col for col in required_columns if col not in self.df.columns]
-                self.log.emit(f"❌ Lỗi: File Excel thiếu các cột bắt buộc: {', '.join(missing_cols)}")
+                self.log.emit(f"❌ Lỗi: Thiếu cột: {', '.join(missing_cols)}")
                 self.finished.emit(None)
                 return
 
-            self.log.emit("ℹ️ Đang xử lý dữ liệu...")
+            self.log.emit("ℹ️ Đang phân tích dữ liệu theo nhóm Address và Amount...")
             
-            self.df = self.df[self.df['item_amount'] <= 4]
-                        
-            # Filter out rows where create_time or registration_time is NaT
-            df_filtered = self.df.dropna(subset=['create_time', 'registration_time', 'ip_checkout']).copy()
-            df_sorted = df_filtered.sort_values(by=['ip_checkout', 'create_time']).reset_index(drop=True)
+            # Loại bỏ NaN và lọc item_amount <= 3 (nếu cần)
+            df_filtered = self.df.dropna(subset=required_columns).copy()
+            df_filtered = df_filtered[df_filtered['item_amount'] >= 3]
+            # Sắp xếp theo gmv_vnd để tối ưu việc tìm kiếm chênh lệch 300k
+            df_sorted = df_filtered.sort_values(by=['buyer_shipping_address_state', 'item_amount', 'gmv_vnd']).reset_index(drop=True)
 
-            final_grouped_ids = set() # To store all unique IDs that belong to any valid group
+            final_grouped_ids = set()
             
-            total_unique_ips = len(df_sorted['ip_checkout'].unique())
-            processed_ips = 0
+            # Nhóm theo Tỉnh thành và Số lượng sản phẩm
+            grouped = df_sorted.groupby(['buyer_shipping_address_state', 'item_amount'])
+            total_groups = len(grouped)
+            processed_groups = 0
 
-            # Iterate through each unique ip_checkout group
-            for ip_checkout_val, group in df_sorted.groupby('ip_checkout'):
-                processed_ips += 1
-                self.progress.emit(int((processed_ips / total_unique_ips) * 100))
+            for name, group in grouped:
+                processed_groups += 1
+                self.progress.emit(int((processed_groups / total_groups) * 100))
                 
-                records_for_ip = group.to_dict('records')
-                
-                if len(records_for_ip) < 3:
+                records = group.to_dict('records')
+                if len(records) < 4:
                     continue
                 
-                # Sửa đổi logic tại đây
-                for i in range(len(records_for_ip) - 2):
-                    current_record = records_for_ip[i]
-                    # Bắt đầu tìm kiếm một chuỗi liên tiếp
-                    potential_group = [current_record['buyer_id']]
-                    for j in range(i + 1, len(records_for_ip)):
-                        next_record = records_for_ip[j]
+                # Duyệt tìm các bản ghi có gmv_vnd chênh lệch <= 300,000
+                for i in range(len(records)):
+                    current_val = records[i]['gmv_vnd']
+                    potential_group = [records[i]['buyer_id']]
+                    
+                    for j in range(i + 1, len(records)):
+                        next_val = records[j]['gmv_vnd']
                         
-                        # So sánh với bản ghi ĐẦU TIÊN của chuỗi hiện tại
-                        create_time_diff = abs(next_record['create_time'] - current_record['create_time'])
-                        registration_time_diff = abs(next_record['registration_time'] - current_record['registration_time'])
-                        
-                        if create_time_diff <= timedelta(hours=1) and registration_time_diff <= timedelta(hours=1):
-                            potential_group.append(next_record['buyer_id'])
+                        # Vì đã sort theo gmv_vnd, nếu hiệu số > 300k thì các dòng sau cũng sẽ > 300k
+                        if (next_val - current_val) <= 300000:
+                            potential_group.append(records[j]['buyer_id'])
                         else:
-                            # Dừng khi chuỗi bị phá vỡ
                             break
                     
-                    if len(set(potential_group)) >= 3:
+                    # Kiểm tra nếu có ít nhất 3 buyer_id khác nhau trong cụm này
+                    if len(set(potential_group)) >= 4:
                         final_grouped_ids.update(set(potential_group))
 
-            self.log.emit("ℹ️ Đang lưu kết quả...")
-            self.progress.emit(100) # Ensure progress is 100% at the end
+            self.log.emit("ℹ️ Đang xuất file kết quả...")
             
-            # Create a DataFrame for the final grouped IDs (single column)
             if final_grouped_ids:
                 df_output_ids = pd.DataFrame(list(final_grouped_ids), columns=['ID'])
                 df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
-                self.log.emit(f"✅ Đã lưu danh sách ID nhóm tại: {self.output_file_path}")
+                self.log.emit(f"✅ Thành công: Tìm thấy {len(final_grouped_ids)} ID thỏa mãn điều kiện.")
             else:
-                self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (ít nhất 3 ID riêng biệt trong 1 giờ cho cả create_time và registration_time).")
+                self.log.emit("ℹ️ Không tìm thấy ID nào thỏa mãn các tiêu chí so sánh giá trị đơn hàng.")
             
-            self.finished.emit(True) # Indicate successful completion
+            self.finished.emit(True)
             
-        except FileNotFoundError:
-            self.log.emit(f"❌ Lỗi: Không tìm thấy file tại đường dẫn: {self.input_file_path}")
-            self.finished.emit(None)
         except Exception as e:
-            self.log.emit(f"❌ Đã xảy ra lỗi trong quá trình xử lý: {e}")
+            self.log.emit(f"❌ Lỗi hệ thống: {str(e)}")
             self.finished.emit(None)
 class Worker6(QtCore.QThread):
 
@@ -855,7 +836,7 @@ class Worker7(QtCore.QThread):
 
             self.log.emit("ℹ️ Đang xử lý dữ liệu...")
             
-            required_columns = ['buyer_id', 'Order Value (Checkout Amount)', 'buyer_shipping_address_district']
+            required_columns = ['buyer_id', 'gmv_vnd', 'buyer_shipping_address_district']
             if not all(col in self.df.columns for col in required_columns):
                 missing_cols = [col for col in required_columns if col not in self.df.columns]
                 self.log.emit(f"❌ Lỗi: File thiếu các cột bắt buộc cho báo cáo này: {', '.join(missing_cols)}")
@@ -894,7 +875,7 @@ class Worker7(QtCore.QThread):
             self.df['original_index'] = self.df.index 
             
             # Use 'records' for efficient iteration in Python loop
-            records = self.df[['original_index', 'cleaned_address', 'buyer_id', 'Order Value (Checkout Amount)']].to_dict('records')
+            records = self.df[['original_index', 'cleaned_address', 'buyer_id', 'gmv_vnd']].to_dict('records')
 
             # The hashmap/dictionary for blocking
             # Key: (address_block, order_value) -> Value: list of record_dicts
@@ -902,7 +883,7 @@ class Worker7(QtCore.QThread):
 
             for record in records:
                 address_cleaned = record['cleaned_address']
-                order_value = record['Order Value (Checkout Amount)']
+                order_value = record['gmv_vnd']
 
                 if address_cleaned is None or pd.isna(order_value):
                     continue # Skip records that couldn't be normalized/cleaned or have no value
@@ -950,8 +931,8 @@ class Worker7(QtCore.QThread):
                         continue
                     
                     current_address = current_record_in_block['cleaned_address']
-                    current_order_value = current_record_in_block['Order Value (Checkout Amount)']
-                    
+                    current_order_value = current_record_in_block['gmv_vnd']
+
                     current_cluster_original_indices = [current_original_index]
                     current_cluster_buyer_ids = [current_record_in_block['buyer_id']]
 
@@ -964,7 +945,7 @@ class Worker7(QtCore.QThread):
                             continue
 
                         other_address = other_record_in_block['cleaned_address']
-                        other_order_value = other_record_in_block['Order Value (Checkout Amount)']
+                        other_order_value = other_record_in_block['gmv_vnd']
 
                         # Ensure addresses and values are not None before comparing
                         if current_address is None or other_address is None or \
@@ -1028,8 +1009,7 @@ class Worker8(QtCore.QThread):
 
     def __init__(self, input_file_path, output_file_path):
         """
-        Initializes the Worker11 thread.
-        
+                
         Args:
             input_file_path (str): Path to the input Excel or CSV file.
             output_file_path (str): Path to save the output Excel file.
@@ -1669,7 +1649,7 @@ class Worker10(QtCore.QThread):
             self.finished.emit(None)
 class Worker11(QtCore.QThread):
     """
-    Lớp con của QThread để thực hiện việc nhóm dữ liệu N3
+    Lớp con của QThread để thực hiện việc nhóm dữ liệu N3 6 - 9
     Phát tín hiệu để cập nhật tiến độ, thông báo nhật ký và trạng thái hoàn thành.
     """
     progress = QtCore.pyqtSignal(int)
@@ -2461,7 +2441,7 @@ class Worker16(QtCore.QThread):
 class Worker17(QtCore.QThread):
     """
     Same city and district + reg time
-    Lớp con của QThread để thực hiện việc nhóm dữ liệu Same District + City and Create time within 01 hour Report with threshold 6 unique buyer_id's và create_time - registration_time <= 20 phút
+    Lớp con của QThread để thực hiện việc nhóm dữ liệu Same State + City and Create time within 01 hour Report with threshold 6 unique buyer_id's và create_time - registration_time <= 20 phút
     Phát tín hiệu để cập nhật tiến độ, thông báo nhật ký và trạng thái hoàn thành.
     """
     progress = QtCore.pyqtSignal(int)
@@ -2486,8 +2466,9 @@ class Worker17(QtCore.QThread):
             if self.df is None:
                 self.finished.emit(None)
                 return
-
-            self.df = self.df[self.df['buyer_email'] != ''].copy()
+            # Chỉ lấy các dòng có email là rỗng
+            self.df['buyer_email'] = self.df['buyer_email'].fillna('')
+            self.df = self.df[self.df['buyer_email'] == ''].copy()
             
             # 2. Define Columns and Validate
             drop_column = ["grass_hour", "order_id", "item_name", "seller_id", "shop_name", "status_b", 
@@ -2502,9 +2483,9 @@ class Worker17(QtCore.QThread):
             
             self.df = self.df.drop(columns=drop_column, errors='ignore')
             
-            GROUPING_KEYS = ['buyer_shipping_address_district', 
+            GROUPING_KEYS = ['buyer_shipping_address_state', 
                              'buyer_shipping_address_city']
-            REQUIRED_COLUMNS = ['create_time', 'buyer_id','registration_time','create_time'] + GROUPING_KEYS
+            REQUIRED_COLUMNS = ['create_time', 'buyer_id','registration_time'] + GROUPING_KEYS
             
             if not all(col in self.df.columns for col in REQUIRED_COLUMNS):
                 missing_cols = [col for col in REQUIRED_COLUMNS if col not in self.df.columns]
@@ -2521,7 +2502,6 @@ class Worker17(QtCore.QThread):
 
             # Filter out records where time_diff_minutes > 20
             self.df = self.df[self.df['time_diff_minutes'] <= 20]
-            
             df_processed = self.df.dropna(subset=REQUIRED_COLUMNS).copy()
             
             # Sort by keys AND time for correct sequential processing
@@ -2582,10 +2562,91 @@ class Worker17(QtCore.QThread):
                 df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
                 self.log.emit(f"✅ Hoàn thành! Đã lưu {len(ids_more_than_six)} ID vào file.")
             else:
-                self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (Same IP >= 6 ID trong 1 giờ).")
+                self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí Same State + City and Create time within 01 hour Report with threshold 6 unique buyer_id's và create_time - registration_time <= 20 phút).")
             
             self.finished.emit(self.df)
             
+        except Exception as e:
+            self.log.emit(f"❌ Đã xảy ra lỗi: {str(e)}")
+            self.finished.emit(None)
+class Worker18(QtCore.QThread):
+
+    """
+    Lớp con của QThread để thực hiện việc nhóm dữ liệu Same Name + District + City + State
+    Phát tín hiệu để cập nhật tiến độ, thông báo nhật ký và trạng thái hoàn thành.
+    """
+    progress = QtCore.pyqtSignal(int)
+    log = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(object)
+
+    def __init__(self, input_file_path, output_file_path):
+        """
+        Khởi tạo luồng Worker.
+        Args:
+            input_file_path (str): Đường dẫn đến file Excel đầu vào.
+            output_file_path (str): Đường dẫn để lưu file Excel kết quả.
+        """
+        super().__init__()
+        self.input_file_path = input_file_path
+        self.output_file_path = output_file_path
+
+    def run(self):
+        try:
+            self.df = read_and_map_data(self.input_file_path, self.log)
+            if self.df is None:
+                self.finished.emit(None)
+                return
+            drop_column = ["grass_hour","create_time","order_id","item_name","seller_id","shop_name","status_b","buyer_user_name","buyer_email","buyer_shipping_address","address_modified_time_latest","sz_device","ip_checkout","gmv_vnd","pv_promotion_cap","pv_promotion_name","pv_voucher_code","pv_rebate_by_shopee_vnd","is_nuv","sv_promotion_id","sv_voucher_code","coin_earn","coin_used_cash_amt","is_fsv_nuv","origin_shipping_fee_vnd","item_rebate_vnd","item_id","is_buyer_legit","is_seller_cb_seller","is_seller_official_shop","is_seller_preferred_seller","order_sn","buyer_cancel_reason"]
+            self.df = self.df.drop(columns=drop_column, errors='ignore')
+            # Validate required columns
+            required_columns = ['buyer_id', 'buyer_shipping_address_district', "buyer_shipping_address_city", "buyer_shipping_address_state", "recipient_name"]
+            if not all(col in self.df.columns for col in required_columns):
+                missing_cols = [col for col in required_columns if col not in self.df.columns]
+                self.log.emit(f"❌ Lỗi: File Excel thiếu các cột bắt buộc: {', '.join(missing_cols)}")
+                self.finished.emit(None)
+                return
+
+            self.log.emit("ℹ️ Đang xử lý dữ liệu...")
+            # Get all the group of > or more unique id have the same recipient_phone_ and the same pv_promotion_id
+            # Ensure 'pv_promotion_id' is string to handle mixed types consistently
+            # self.df['fsv_voucher_code'] = self.df['fsv_voucher_code'].astype(str)
+            # Ensure 'recipient_phone_' and 'pv_promotion_id' are strings to handle mixed types consistently
+            # self.df['recipient_phone_'] = self.df['recipient_phone_'].astype(str)
+            # Group by recipient_phone_ and pv_promotion_id
+            # Then, for each group, find the number of unique buyer_id's
+            df_processed = self.df.dropna(subset=['buyer_id', 'buyer_shipping_address_district', "buyer_shipping_address_city", "buyer_shipping_address_state", "recipient_name"]).copy()
+
+            grouped_df = df_processed.groupby([ 'buyer_shipping_address_district', "buyer_shipping_address_city", "buyer_shipping_address_state", "recipient_name"])['buyer_id'].nunique().reset_index(name='unique_buyer_ids_count')
+
+            # Filter for groups with 6 or more unique buyer_id's
+            filtered_groups = grouped_df[grouped_df['unique_buyer_ids_count'] >= 6]
+
+            final_grouped_ids = set()
+
+            # For each filtered group (that has 6 or more unique buyer_ids),
+            # get all buyer_id's from the original DataFrame that belong to these groups.
+            # This is more efficient than iterating through rows.
+            if not filtered_groups.empty:
+                # Merge original df with filtered groups to get all buyer_ids
+                merged_df = pd.merge(
+                    self.df,
+                    filtered_groups[[ 'buyer_shipping_address_district', "buyer_shipping_address_city", "buyer_shipping_address_state", "recipient_name"]],
+                    on=['buyer_shipping_address_district', "buyer_shipping_address_city", "buyer_shipping_address_state", "recipient_name"],
+                    how='inner'
+                )
+                final_grouped_ids.update(merged_df['buyer_id'].unique())
+
+            self.log.emit("ℹ️ Đang lưu kết quả...")
+            
+            # Create a DataFrame for the final grouped IDs (single column)
+            if final_grouped_ids:
+                df_output_ids = pd.DataFrame(list(final_grouped_ids), columns=['ID'])
+                df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
+                self.log.emit(f"✅ Đã lưu danh sách ID nhóm theo khuyến mãi tại: {self.output_file_path}")
+            else:
+                self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (buyer_shipping_address_district, buyer_shipping_address_city, buyer_shipping_address_state, recipient_name >= 6 ID).")
+            
+            self.finished.emit(self.df)
         except Exception as e:
             self.log.emit(f"❌ Đã xảy ra lỗi: {str(e)}")
             self.finished.emit(None)
@@ -2914,7 +2975,7 @@ class Ui_MainWindow(object):
             # }
         """
         self.is_dark_mode = False # Track current mode
-        MainWindow.setStyleSheet(self.light_mode_stylesheet) # Apply initial stylesheet
+        MainWindow.setStyleSheet(self.dark_mode_stylesheet) # Apply initial stylesheet
         # Interactive Buttons
         
         # --- Central Widget & Main Layout ---
@@ -2966,13 +3027,14 @@ class Ui_MainWindow(object):
         self.tabWidget = QtWidgets.QTabWidget()
         main_layout.addWidget(self.tabWidget)
 
-        # --- TAB 1: NHÓM HỆ THỐNG & IP ---
+        # --- TAB 1: NHÓM 1 ---
         self.tab1 = QtWidgets.QWidget()
         self.tab1_layout = QtWidgets.QVBoxLayout(self.tab1)
         
         t1_content_layout = QtWidgets.QHBoxLayout()
         t1_btn_col = QtWidgets.QVBoxLayout()
-        
+        t1_btn_col2 = QtWidgets.QVBoxLayout()
+        t1_btn_col3 = QtWidgets.QVBoxLayout()
         # Khởi tạo nút Tab 1
         self.same_promotion_phone_btn = QtWidgets.QPushButton("Same Promotion + Phone Report") #ok
         self.ip_create_time_btn = QtWidgets.QPushButton("Same IP and Create Time Report") #ok
@@ -2984,7 +3046,7 @@ class Ui_MainWindow(object):
         self.rsl_btn = QtWidgets.QPushButton("RSL Report")#ok
         self.similiar_address_btn = QtWidgets.QPushButton("Similar Address Report")#ok
 
-        # Kết nối sự kiện Tab 1 (Sửa lỗi AttributeError tại đây)
+        # Kết nối sự kiện Tab 1
         self.same_promotion_phone_btn.clicked.connect(self.same_promotion_phone)
         self.ip_create_time_btn.clicked.connect(self.same_ip_check_out)
         self.same_prm_phone_district_btn.clicked.connect(self.same_prm_phone_district)
@@ -2997,17 +3059,23 @@ class Ui_MainWindow(object):
         
         for btn in [self.same_promotion_phone_btn,
                     self.ip_create_time_btn,
-                    self.same_prm_phone_district_btn,
-                    self.rsl_item_btn,
+                    self.same_prm_phone_district_btn
+                    ]:
+            t1_btn_col.addWidget(btn)
+        for btn in [self.rsl_item_btn,
                     self.same_recipient_phone_btn,
-                    self.same_order_value_check_out_and_similar_address_btn,
+                    self.same_order_value_check_out_and_similar_address_btn]:
+            t1_btn_col2.addWidget(btn)
+
+        for btn in [
                     self.tolerant_address_btn,
                     self.rsl_btn,
                     self.similiar_address_btn]:
-            t1_btn_col.addWidget(btn)
-
+            t1_btn_col3.addWidget(btn)
         # Cột Checkbox Tab 1
         t1_check_col = QtWidgets.QVBoxLayout()
+        t1_check_col2 = QtWidgets.QVBoxLayout()
+        t1_check_col3 = QtWidgets.QVBoxLayout()
         self.same_promotion_phone_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.ip_create_time_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.same_prm_phone_district_btn_checkbox = QtWidgets.QCheckBox('Checked')
@@ -3018,38 +3086,54 @@ class Ui_MainWindow(object):
         self.rsl_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.similiar_address_btn_checkbox = QtWidgets.QCheckBox('Checked')
         
-        for cb in [self.same_promotion_phone_btn_checkbox, self.ip_create_time_btn_checkbox, self.same_prm_phone_district_btn_checkbox,
-                   self.rsl_item_btn_checkbox, self.same_recipient_phone_btn_checkbox, self.same_order_value_check_out_and_similar_address_btn_checkbox, self.tolerant_address_btn_checkbox,self.rsl_btn_checkbox,self.similiar_address_btn_checkbox]:
+        for cb in [self.same_promotion_phone_btn_checkbox, self.ip_create_time_btn_checkbox, self.same_prm_phone_district_btn_checkbox]:
             t1_check_col.addWidget(cb)
+            
+        for cb in [self.rsl_item_btn_checkbox, self.same_recipient_phone_btn_checkbox, self.same_order_value_check_out_and_similar_address_btn_checkbox]:
+            t1_check_col2.addWidget(cb)
+        for cb in [self.tolerant_address_btn_checkbox,self.rsl_btn_checkbox,self.similiar_address_btn_checkbox]:
+            t1_check_col3.addWidget(cb)
+            
 
         t1_content_layout.addLayout(t1_btn_col)
         t1_content_layout.addLayout(t1_check_col)
+
+        t1_content_layout.addLayout(t1_btn_col2)
+        t1_content_layout.addLayout(t1_check_col2)
+
+        t1_content_layout.addLayout(t1_btn_col3)
+        t1_content_layout.addLayout(t1_check_col3)
+
         self.tab1_layout.addLayout(t1_content_layout)
         self.tab1_layout.addStretch()
 
-        # --- TAB 2: NHÓM ĐỊA CHỈ & KHÁCH HÀNG ---
+        # --- TAB 2: NHÓM 2 ---
         self.tab2 = QtWidgets.QWidget()
         self.tab2_layout = QtWidgets.QVBoxLayout(self.tab2)
         
         t2_content_layout = QtWidgets.QHBoxLayout()
         t2_btn_col = QtWidgets.QVBoxLayout()
+        t2_btn_col2 = QtWidgets.QVBoxLayout()
         
         # Khởi tạo nút Tab 2
         self.fsv_btn = QtWidgets.QPushButton("Same FSV Report")
-        self.N3_btn = QtWidgets.QPushButton("N3 Report - 4")
+        self.N3_btn = QtWidgets.QPushButton("N3 Report - 6 - 9")
+        self.N3_btn_4 = QtWidgets.QPushButton("N3 Report - 4")
         self.same_phone_btn = QtWidgets.QPushButton("Same Phone -6 Report")
         self.same_name_district_city_state_btn = QtWidgets.QPushButton("Same Name + District + City + State")
         self.same_ip_create_reg_time_4_btn = QtWidgets.QPushButton("Same IP and Create + RegTime 4 Report")
+        self.same_ip_create_reg_time_6_btn = QtWidgets.QPushButton("Same IP and Create + RegTime 6 Report")
         self.same_domain_reg_time_report_btn = QtWidgets.QPushButton("Same Domain + Reg Time Report")
-        self.same_city_district_reg_time_report_btn = QtWidgets.QPushButton("Same City + District + Reg Time Report")
-        self.N3_btn.setStyleSheet("color: black;") # Highlight primary action and bold text
+        self.same_city_district_reg_time_report_btn = QtWidgets.QPushButton("Same City + State + Reg Time Report")
 
         # Kết nối sự kiện Tab 2
         self.fsv_btn.clicked.connect(self.same_fsv_input)
         self.N3_btn.clicked.connect(self.N3_report)
+        self.N3_btn_4.clicked.connect(self.N3_report_4)
         self.same_phone_btn.clicked.connect(self.same_phone_report)
         self.same_name_district_city_state_btn.clicked.connect(self.same_name_district_city_state_report)
         self.same_ip_create_reg_time_4_btn.clicked.connect(self.same_ip_create_time_4_report)
+        self.same_ip_create_reg_time_6_btn.clicked.connect(self.same_ip_create_reg_time_6_report)
         self.same_domain_reg_time_report_btn.clicked.connect(self.same_domain_reg_time_report)
         self.same_city_district_reg_time_report_btn.clicked.connect(self.same_city_district_reg_time_report)
         
@@ -3057,28 +3141,42 @@ class Ui_MainWindow(object):
                     self.N3_btn,
                     self.same_phone_btn,
                     self.same_name_district_city_state_btn,
-                    self.same_ip_create_reg_time_4_btn,
-                    self.same_domain_reg_time_report_btn,
-                    self.same_city_district_reg_time_report_btn]:
+                    self.N3_btn_4
+                    ]:
             t2_btn_col.addWidget(btn)
 
-        # Cột Checkbox Tab 2 (Giữ nguyên như cũ)
+        for btn in [self.same_ip_create_reg_time_4_btn,
+                    self.same_ip_create_reg_time_6_btn,
+                    self.same_domain_reg_time_report_btn,
+                    self.same_city_district_reg_time_report_btn]:
+            t2_btn_col2.addWidget(btn)
+        # Cột Checkbox Tab 2 
         t2_check_col = QtWidgets.QVBoxLayout()
+        t2_check_col2 = QtWidgets.QVBoxLayout()
         self.fsv_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.N3_btn_checkbox = QtWidgets.QCheckBox('Checked')
+        self.N3_btn_4_checkbox = QtWidgets.QCheckBox('Checked')
         self.same_phone_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.same_name_district_city_state_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.same_ip_create_reg_time_4_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.same_domain_reg_time_report_btn_checkbox = QtWidgets.QCheckBox('Checked')
         self.same_city_district_reg_time_report_btn_checkbox = QtWidgets.QCheckBox('Checked')
         
-        for cb in [self.fsv_btn_checkbox, self.N3_btn_checkbox, self.same_phone_btn_checkbox,
-                   self.same_name_district_city_state_btn_checkbox, self.same_ip_create_reg_time_4_btn_checkbox,
-                   self.same_domain_reg_time_report_btn_checkbox, self.same_city_district_reg_time_report_btn_checkbox]:
+        for cb in [self.fsv_btn_checkbox, self.N3_btn_checkbox, self.N3_btn_4_checkbox, self.same_phone_btn_checkbox,
+                   self.same_name_district_city_state_btn_checkbox]:
             t2_check_col.addWidget(cb)
+
+        for cb in [self.same_ip_create_reg_time_4_btn_checkbox,
+                   self.same_domain_reg_time_report_btn_checkbox,
+                   self.same_city_district_reg_time_report_btn_checkbox]:
+            t2_check_col2.addWidget(cb)
 
         t2_content_layout.addLayout(t2_btn_col)
         t2_content_layout.addLayout(t2_check_col)
+
+        t2_content_layout.addLayout(t2_btn_col2)
+        t2_content_layout.addLayout(t2_check_col2)
+
         self.tab2_layout.addLayout(t2_content_layout)
         self.tab2_layout.addStretch()
 
@@ -3283,7 +3381,7 @@ class Ui_MainWindow(object):
         self._set_buttons_enabled(False)
 
         output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            None, "Lưu File Same", "same_ip_reg_create.xlsx", "Excel Files (*.xlsx)")
+            None, "Lưu File Same", "same_item_amount.xlsx", "Excel Files (*.xlsx)")
         if not output_file_path:
             self.log_output.append("❌ Đã hủy lưu file.")
             self._set_buttons_enabled(True)
@@ -3432,7 +3530,7 @@ class Ui_MainWindow(object):
         
     def N3_report(self):
         """
-        Bắt đầu quá trình tạo báo cáo N3.
+        Bắt đầu quá trình tạo báo cáo N3 6 - 9 .
         Yêu cầu người dùng chọn vị trí lưu và khởi động luồng Worker.
         """
         input_file_path = self.mnv.text()
@@ -3458,6 +3556,33 @@ class Ui_MainWindow(object):
         self.thread.finished.connect(self.on_report_finished)
         self.thread.start()
         
+    def N3_report_4(self):
+        """
+        Bắt đầu quá trình tạo báo cáo N3.
+        Yêu cầu người dùng chọn vị trí lưu và khởi động luồng Worker.
+        """
+        input_file_path = self.mnv.text()
+        if not input_file_path:
+            QtWidgets.QMessageBox.warning(None, "Lỗi", "Vui lòng chọn file Excel gốc.")
+            return
+
+        self.log_output.clear()
+        self.progress_bar.setValue(0)
+        self.log_output.append("🚀 Bắt đầu xử lý...")
+        self._set_buttons_enabled(False)  # Disable buttons during processing
+
+        output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            None, "Lưu File Dữ Liệu Nhóm", "du_lieu_nhom_N3.xlsx", "Excel Files (*.xlsx)")
+        if not output_file_path:
+            self.log_output.append("❌ Đã hủy lưu file.")
+            self._set_buttons_enabled(True)  # Re-enable if cancelled
+            return
+
+        self.thread = Worker13(input_file_path, output_file_path)
+        self.thread.progress.connect(self.progress_bar.setValue)
+        self.thread.log.connect(self.log_output.append)
+        self.thread.finished.connect(self.on_report_finished)
+        self.thread.start()    
     def same_phone_report(self):
         """
         Tạo báo cáo same phone -6.
@@ -3505,12 +3630,12 @@ class Ui_MainWindow(object):
             self._set_buttons_enabled(True)
             return
 
-        self.thread = Worker13(input_file_path, output_file_path)
+        self.thread = Worker18(input_file_path, output_file_path) # Đang sửa
         self.thread.progress.connect(self.progress_bar.setValue)
         self.thread.log.connect(self.log_output.append)
         self.thread.finished.connect(self.on_report_finished)
         self.thread.start()
-    def same_ip_and_create_time_report(self):
+    def same_ip_create_reg_time_6_report(self):
         """
         Tạo báo cáo same IP và create time với threhold >= 6.
         """
@@ -3525,7 +3650,7 @@ class Ui_MainWindow(object):
         self._set_buttons_enabled(False)
 
         output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            None, "Lưu File Same", "same_ip_and_create_time.xlsx", "Excel Files (*.xlsx)")
+            None, "Lưu File Same", "Same IP and Create Time 6.xlsx", "Excel Files (*.xlsx)")
         if not output_file_path:
             self.log_output.append("❌ Đã hủy lưu file.")
             self._set_buttons_enabled(True)
@@ -3551,7 +3676,7 @@ class Ui_MainWindow(object):
         self._set_buttons_enabled(False)
 
         output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            None, "Lưu File Same", "Same IP+ create time - 4.xlsx", "Excel Files (*.xlsx)")
+            None, "Lưu File Same", "Same IP and Create Time 4.xlsx", "Excel Files (*.xlsx)")
         if not output_file_path:
             self.log_output.append("❌ Đã hủy lưu file.")
             self._set_buttons_enabled(True)
@@ -3577,7 +3702,7 @@ class Ui_MainWindow(object):
         self._set_buttons_enabled(False)
 
         output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            None, "Lưu File Same", "Same IP+ create time - 4.xlsx", "Excel Files (*.xlsx)")
+            None, "Lưu File Same", "Same domain.xlsx", "Excel Files (*.xlsx)")
         if not output_file_path:
             self.log_output.append("❌ Đã hủy lưu file.")
             self._set_buttons_enabled(True)
@@ -3590,7 +3715,7 @@ class Ui_MainWindow(object):
         self.thread.start()
     def same_city_district_reg_time_report(self):
         """
-        Tạo báo cáo same domain và registration time với threshold 6.
+        Tạo báo cáo same city district và registration time với threshold 6.
         """
         input_file_path = self.mnv.text()
         if not input_file_path:
@@ -3603,7 +3728,7 @@ class Ui_MainWindow(object):
         self._set_buttons_enabled(False)
 
         output_file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            None, "Lưu File Same", "Same IP+ create time - 4.xlsx", "Excel Files (*.xlsx)")
+            None, "Lưu File Same", "Same city district + registration time.xlsx", "Excel Files (*.xlsx)")
         if not output_file_path:
             self.log_output.append("❌ Đã hủy lưu file.")
             self._set_buttons_enabled(True)
@@ -3614,6 +3739,7 @@ class Ui_MainWindow(object):
         self.thread.log.connect(self.log_output.append)
         self.thread.finished.connect(self.on_report_finished)
         self.thread.start()    
+
     def toggle_dark_mode(self, state):
         if state == QtCore.Qt.CheckState.Checked.value: # Dark mode is ON
             self.is_dark_mode = True
@@ -3915,12 +4041,6 @@ class MainWindowApp(QtWidgets.QMainWindow):
         self.setWindowTitle(f"GROUPING TOOL {APP_VERSION}")
         # Log này chỉ cần thiết cho cửa sổ chính, không phải cho quá trình khởi động/update
         self.ui.log_output.append(f"Current version: {APP_VERSION}")
-
-        # KHÔNG GỌI self._start_update_check() Ở ĐÂY NỮA!
-        # Việc kiểm tra cập nhật được thực hiện bởi StartupUpdateManager trước khi hiển thị cửa sổ này.
-
-    # Các phương thức khác của MainWindowApp (generate_report_n3, generate_similar_name_report, v.v.)
-    # và các Worker threads (Worker4, Worker5, Worker6) giữ nguyên.
     
 
 if __name__ == "__main__":
