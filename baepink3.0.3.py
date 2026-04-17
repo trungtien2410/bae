@@ -12,6 +12,7 @@ import requests
 import semver
 import tempfile
 import time
+# import openpyxl
 def read_and_map_data(file_path, log_emitter):
     """
     Reads data from an Excel or CSV file and maps columns based on a predefined dictionary.
@@ -269,7 +270,7 @@ class Worker1(QtCore.QThread):
             if final_grouped_ids:
                 df_output_ids = pd.DataFrame(list(final_grouped_ids), columns=['ID'])
                 df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
-                self.log.emit(f"✅ Đã lưu danh sách{len(final_grouped_ids)} ID nhóm theo khuyến mãi tại: {self.output_file_path}")
+                self.log.emit(f"✅ Đã lưu danh sách {len(final_grouped_ids)} ID nhóm theo khuyến mãi tại: {self.output_file_path}")
             else:
                 self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (recipient_phone_, Promotion ID, >= 3 ID).")
             
@@ -351,7 +352,7 @@ class Worker2(QtCore.QThread):
             if final_grouped_ids:
                 df_output_ids = pd.DataFrame(list(final_grouped_ids), columns=['ID'])
                 df_output_ids.to_excel(self.output_file_path, index=False, engine='openpyxl')
-                self.log.emit(f"✅ Đã lưu danh sách{len(final_grouped_ids)} ID nhóm theo khuyến mãi tại: {self.output_file_path}")
+                self.log.emit(f"✅ Đã lưu danh sách {len(final_grouped_ids)} ID nhóm theo khuyến mãi tại: {self.output_file_path}")
             else:
                 self.log.emit("ℹ️ Không tìm thấy ID nào để nhóm theo tiêu chí (recipient_phone_, fsv_voucher_code, buyer_shipping_address_district >= 5 ID).")
             
